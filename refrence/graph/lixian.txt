@@ -1,0 +1,1055 @@
+
+
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>专业力导向图编辑器 - 云端持久化版</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --accent-color: #e74c3c;
+            --bg-color: #f5f7fa;
+            --sidebar-width: 280px;
+            --panel-width: 320px;
+            --border-color: #e4e7ed;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Header */
+        header {
+            background: white;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+
+        h1 { font-size: 1.2rem; color: var(--secondary-color); font-weight: 600; }
+
+        .header-controls { display: flex; gap: 16px; align-items: center; }
+
+        .mode-toggle {
+            display: flex; background: #f1f3f5; border-radius: 8px; padding: 4px;
+        }
+        .mode-toggle input { display: none; }
+        .mode-toggle label {
+            padding: 6px 20px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+            font-weight: 600; color: #7f8c8d; transition: 0.3s;
+        }
+        .mode-toggle input:checked + label {
+            background: white; color: var(--primary-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .btn { 
+            padding: 8px 16px; border: none; border-radius: 6px; 
+            cursor: pointer; font-weight: 600; font-size: 0.9rem;
+            transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+        }
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-success { background: #2ecc71; color: white; }
+        .btn-success:hover { background: #27ae60; }
+        .btn-outline { background: white; border: 1px solid var(--border-color); color: var(--secondary-color); }
+        .btn-outline:hover { background: #f8f9fa; border-color: #dcdfe6; }
+        .btn-danger { background: white; border: 1px solid var(--accent-color); color: var(--accent-color); }
+        .btn-danger:hover { background: #fdf0ef; }
+
+        .status-bar { font-size: 0.85rem; color: #95a5a6; }
+
+        /* Main Layout */
+        .main-wrapper { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+        .left-sidebar {
+            width: var(--sidebar-width); background: white; border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; padding: 20px; z-index: 10;
+        }
+
+        .right-panel {
+            width: var(--panel-width); background: white; border-left: 1px solid var(--border-color);
+            display: flex; flex-direction: column; position: absolute; right: 0; top: 0; bottom: 0;
+            z-index: 10; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -4px 0 15px rgba(0,0,0,0.03);
+        }
+        .right-panel.open { transform: translateX(0); }
+
+        .graph-area {
+            flex: 1; position: relative; background-image: radial-gradient(#dcdfe6 1px, transparent 1px);
+            background-size: 20px 20px; background-color: #fafbfc;
+        }
+
+        #graph-svg { width: 100%; height: 100%; outline: none; }
+
+        /* Panels UI */
+        .panel-header {
+            padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex;
+            justify-content: space-between; align-items: center; background: #fdfdfd;
+        }
+        .panel-header h2 { font-size: 1rem; color: var(--secondary-color); }
+        .close-btn { cursor: pointer; color: #95a5a6; font-size: 1.2rem; }
+        .close-btn:hover { color: #333; }
+
+        .panel-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .section-title { font-size: 0.85rem; color: #95a5a6; margin-bottom: 12px; font-weight: 600; text-transform: uppercase; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.85rem; margin-bottom: 6px; color: #444; font-weight: 500;}
+        .form-control { 
+            width: 100%; padding: 8px 10px; border: 1px solid #dcdfe6; 
+            border-radius: 4px; font-size: 0.9rem; color: #333; outline: none; transition: border-color 0.2s;
+        }
+        .form-control:focus { border-color: var(--primary-color); }
+        .form-row { display: flex; gap: 10px; }
+        .form-row .form-group { flex: 1; }
+
+        /* Multi-Select Dropdown */
+        .multi-select { position: relative; }
+        .ms-header {
+            padding: 8px 10px; border: 1px solid #dcdfe6; border-radius: 4px; background: white; cursor: pointer;
+            font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center;
+        }
+        .ms-dropdown {
+            position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #dcdfe6;
+            border-radius: 4px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100;
+            display: none; max-height: 200px; overflow-y: auto;
+        }
+        .ms-dropdown.open { display: block; }
+        .ms-option { padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; }
+        .ms-option:hover { background: #f5f7fa; }
+        .ms-option input { cursor: pointer; }
+
+        /* Resource Manager Fullscreen Modal */
+        .fullscreen-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;
+            backdrop-filter: blur(3px);
+        }
+        .tm-container {
+            width: 850px; height: 600px; background: white; border-radius: 12px;
+            display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .tm-header { padding: 0 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: flex-end; background: #fdfdfd;}
+        
+        .modal-tabs { display: flex; gap: 24px; }
+        .modal-tab { padding: 16px 0 12px; font-size: 0.95rem; font-weight: 600; color: #95a5a6; cursor: pointer; border-bottom: 3px solid transparent; transition: 0.2s;}
+        .modal-tab:hover { color: var(--secondary-color); }
+        .modal-tab.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+
+        .tm-body { display: flex; flex: 1; overflow: hidden; }
+        .tm-list-pane { width: 250px; border-right: 1px solid var(--border-color); background: #fafbfc; display: flex; flex-direction: column; }
+        .tm-list { flex: 1; overflow-y: auto; padding: 12px; }
+        .tm-item { padding: 10px 12px; margin-bottom: 6px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; display: flex; align-items: center; gap: 8px;}
+        .tm-item:hover { background: #f0f2f5; }
+        .tm-item.active { background: #e6f1fc; border-color: #b3d4fc; color: var(--primary-color); font-weight: 600;}
+        .tm-color-dot { width: 14px; height: 14px; border-radius: 4px; }
+        .tm-edit-pane { flex: 1; padding: 24px; overflow-y: auto; background: white;}
+
+        /* Custom Dialog */
+        .dialog-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); z-index: 2000; justify-content: center; align-items: center;
+        }
+        .dialog-box { background: white; padding: 24px; border-radius: 8px; width: 320px; box-shadow: 0 10px 25px rgba(0,0,0,0.15); text-align: center;}
+        
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #2c3e50;
+            color: white; padding: 10px 24px; border-radius: 30px; font-size: 0.9rem; z-index: 3000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+
+        /* SVG Elements */
+        .node { stroke: #fff; stroke-width: 2px; transition: stroke-width 0.2s; }
+        .node.selected { stroke: var(--accent-color); stroke-width: 3px; filter: drop-shadow(0 0 6px rgba(231, 76, 60, 0.6)); }
+        .link { fill: none; cursor: pointer; transition: stroke-width 0.2s; }
+        .link:hover { stroke-width: 4px !important; }
+        .link.selected { stroke: var(--accent-color) !important; stroke-width: 3px; }
+        .node-label { font-size: 12px; font-weight: bold; pointer-events: none; fill: #2c3e50; }
+        #ghost-line { stroke: var(--primary-color); stroke-dasharray: 5,5; pointer-events: none; display: none; stroke-width: 2px;}
+        #selection-box { fill: rgba(52, 152, 219, 0.15); stroke: var(--primary-color); stroke-width: 1px; pointer-events: none; display: none; }
+        .list-card { padding: 8px 12px; background: #fff; border: 1px solid #eee; border-radius: 6px; margin-bottom: 6px; font-size: 0.85rem;}
+        .tooltip { position: absolute; background: rgba(0,0,0,0.75); color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; pointer-events: none; opacity: 0; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-controls">
+            <h1>关系图谱专业版</h1>
+            <div class="status-bar" id="statusInfo">正在连接服务器...</div>
+        </div>
+        
+        <div class="header-controls">
+            <div class="mode-toggle">
+                <input type="radio" id="mode-view" name="mode" value="view" checked>
+                <label for="mode-view">👁️ 浏览</label>
+                <input type="radio" id="mode-edit" name="mode" value="edit">
+                <label for="mode-edit">✏️ 编辑</label>
+            </div>
+            <button class="btn btn-outline" onclick="editor.openResourceManager()">⚙️ 资源管理</button>
+            <button class="btn btn-success" id="btnSaveToCloud" onclick="editor.syncToCloud()">💾 保存到云端</button>
+        </div>
+    </header>
+
+    <div class="main-wrapper">
+        <aside class="left-sidebar">
+            <div class="section-title">图层过滤 (按主题)</div>
+            <div class="form-group multi-select" id="themeFilterMS">
+                <div class="ms-header" onclick="document.getElementById('ms-dropdown').classList.toggle('open')">
+                    <span id="ms-text">选择要显示的主题...</span>
+                    <span>▼</span>
+                </div>
+                <div class="ms-dropdown" id="ms-dropdown"></div>
+            </div>
+
+            <div class="section-title" style="margin-top: 20px;">新建元素归属主题</div>
+            <div class="form-group">
+                <select class="form-control" id="defaultCreateTheme"></select>
+            </div>
+
+            <div class="section-title" style="margin-top: 20px;">当前选中元素</div>
+            <div id="selectionList" style="flex:1; overflow-y:auto;">
+                <div style="color:#aaa; font-size: 0.85rem;">当前无选中项</div>
+            </div>
+        </aside>
+
+        <main class="graph-area">
+            <svg id="graph-svg">
+                <defs>
+                    <marker id="arrowhead" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-5L10,0L0,5" fill="context-stroke" />
+                    </marker>
+                    <marker id="arrowhead-selected" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-5L10,0L0,5" fill="#e74c3c" />
+                    </marker>
+                </defs>
+                <g id="main-group">
+                    <line id="ghost-line" x1="0" y1="0" x2="0" y2="0" />
+                    <g id="links-group"></g>
+                    <g id="nodes-group"></g>
+                    <g id="labels-group"></g>
+                </g>
+                <rect id="selection-box" x="0" y="0" width="0" height="0"></rect>
+            </svg>
+            <div id="tooltip" class="tooltip"></div>
+        </main>
+
+        <aside class="right-panel" id="propertiesPanel">
+            <div class="panel-header">
+                <h2>属性与样式分配</h2>
+                <div class="close-btn" onclick="editor.closeProperties()">×</div>
+            </div>
+            <div class="panel-body">
+                <form id="propertiesForm">
+                    <div class="form-group">
+                        <label>标签名称</label>
+                        <input type="text" id="propLabel" class="form-control" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>归属主题 (图层)</label>
+                        <select id="propTheme" class="form-control"></select>
+                    </div>
+
+                    <div id="propNodeFields">
+                        <div class="section-title" style="margin-top: 24px;">外观样式</div>
+                        <div class="form-group">
+                            <label>应用节点样式</label>
+                            <select id="propNodeStyle" class="form-control"></select>
+                        </div>
+                    </div>
+
+                    <div id="propEdgeFields" style="display:none;">
+                        <div class="section-title" style="margin-top: 24px;">外观样式</div>
+                        <div class="form-group">
+                            <label>应用连线样式</label>
+                            <select id="propEdgeStyle" class="form-control"></select>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:30px;">
+                        <button type="submit" class="btn btn-primary" style="flex:1;">确认修改</button>
+                    </div>
+                </form>
+            </div>
+        </aside>
+    </div>
+
+    <!-- 资源管理中心 -->
+    <div class="fullscreen-modal" id="resourceManagerModal">
+        <div class="tm-container">
+            <div class="tm-header">
+                <div class="modal-tabs">
+                    <div class="modal-tab active" data-tab="themes" onclick="editor.rmSwitchTab('themes')">🎨 主题管理</div>
+                    <div class="modal-tab" data-tab="nodeStyles" onclick="editor.rmSwitchTab('nodeStyles')">🟣 节点样式</div>
+                    <div class="modal-tab" data-tab="edgeStyles" onclick="editor.rmSwitchTab('edgeStyles')">➖ 连线样式</div>
+                </div>
+                <div class="close-btn" style="padding-bottom: 12px;" onclick="editor.closeResourceManager()">×</div>
+            </div>
+            <div class="tm-body">
+                <div class="tm-list-pane">
+                    <div class="tm-list" id="rmList"></div>
+                    <div style="padding: 12px; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-outline" style="width:100%;" onclick="editor.rmCreateNew()">+ 新建</button>
+                    </div>
+                </div>
+                <div class="tm-edit-pane" id="rmEditPane">
+                    <form id="rmForm">
+                        <div class="section-title">基础配置</div>
+                        <div class="form-group">
+                            <label>名称</label>
+                            <input type="text" id="rmName" class="form-control" required autocomplete="off">
+                        </div>
+                        
+                        <div id="formThemes" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">默认应用样式</div>
+                            <div class="form-group">
+                                <label>默认节点样式</label>
+                                <select id="rmThemeNodeStyle" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>默认连线样式</label>
+                                <select id="rmThemeEdgeStyle" class="form-control"></select>
+                            </div>
+                        </div>
+
+                        <div id="formNodeStyles" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">视觉表现</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>填充颜色</label>
+                                    <input type="color" id="rmNodeColor" class="form-control" style="padding:2px; height:38px;">
+                                </div>
+                                <div class="form-group">
+                                    <label>节点形状</label>
+                                    <select id="rmNodeShape" class="form-control">
+                                        <option value="circle">圆形</option>
+                                        <option value="square">矩形</option>
+                                        <option value="triangle">三角形</option>
+                                        <option value="diamond">菱形</option>
+                                        <option value="star">星形</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>透明度</label>
+                                <input type="range" id="rmNodeOpacity" min="0.1" max="1" step="0.1" style="width:100%">
+                            </div>
+                        </div>
+
+                        <div id="formEdgeStyles" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">视觉表现</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>线条颜色</label>
+                                    <input type="color" id="rmEdgeColor" class="form-control" style="padding:2px; height:38px;">
+                                </div>
+                                <div class="form-group">
+                                    <label>线条样式</label>
+                                    <select id="rmEdgeStyle" class="form-control">
+                                        <option value="solid">实线</option>
+                                        <option value="dashed">虚线</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:10px; margin-top:40px; padding-top:20px; border-top:1px solid #eee;">
+                            <button type="submit" class="btn btn-primary" id="btnSaveResource">保存更改</button>
+                            <button type="button" class="btn btn-danger" onclick="editor.rmDeleteCurrent()">删除此项</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义确认弹窗 -->
+    <div class="dialog-overlay" id="confirmDialog">
+        <div class="dialog-box">
+            <h3 style="margin-bottom: 10px; font-size:1.1rem;">确认操作</h3>
+            <p id="confirmMsg" style="color:#7f8c8d; font-size:0.9rem; margin-bottom: 24px;"></p>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-danger" id="confirmOk" style="flex:1;">确认</button>
+                <button class="btn btn-outline" id="confirmCancel" style="flex:1;">取消</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast">操作成功</div>
+
+    <script>
+        // ==========================================
+        // 配置与初始化 (指向 FastAPI 服务端口)
+        // ==========================================
+        const API_BASE_URL = 'http://127.0.0.1:8000/api';
+        const GRAPH_ID = 'graph-demo-001'; // 当前编辑的图谱 ID
+
+        class GraphEditor {
+            constructor() {
+                this.nodes = [];
+                this.links = [];
+                this.nodeIdCounter = 1;
+                this.linkIdCounter = 1;
+
+                this.nodeStyles = [];
+                this.edgeStyles = [];
+                this.themes = [];
+                this.resourceIdCounter = 1;
+                
+                this.visibleThemes = new Set(); 
+                this.activeCreateThemeId = null;                  
+
+                this.mode = 'view';
+                this.currentTransform = d3.zoomIdentity;
+                this.isBrushing = false;
+                this.brushStartPoint = null;
+                this.isLinking = false;
+                this.linkSourceNode = null;
+                this.hoveredNode = null;
+                
+                this.editingItem = null;
+                this.editingType = null;
+                
+                this.rmActiveTab = 'themes';
+                this.rmEditingId = null;
+
+                this.initD3();
+                this.initEvents();
+                
+                // 系统加载时自动从云端获取数据
+                this.fetchDataFromServer();
+            }
+
+            // ==========================================
+            // 接口联调模块 (API Data Sync)
+            // ==========================================
+            async fetchDataFromServer() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/graphs/${GRAPH_ID}/data`);
+                    if (!response.ok) throw new Error("图谱未找到或网络错误");
+                    
+                    const data = await response.json();
+                    
+                    this.nodeStyles = data.nodeStyles || [];
+                    this.edgeStyles = data.edgeStyles || [];
+                    this.themes = data.themes || [];
+                    
+                    if(this.themes.length === 0) this.initDefaultPresets();
+
+                    this.nodes = data.nodes || [];
+                    this.links = data.links || [];
+                    
+                    // 同步计数器，防止 ID 冲突
+                    if(this.nodes.length) this.nodeIdCounter = Math.max(...this.nodes.map(n => parseInt(n.id.replace('N',''))||0)) + 1;
+                    if(this.links.length) this.linkIdCounter = Math.max(...this.links.map(l => parseInt(l.id.replace('E',''))||0)) + 1;
+                    
+                    this.visibleThemes = new Set(this.themes.map(t => t.id));
+                    this.activeCreateThemeId = this.themes[0]?.id || null;
+
+                    this.showToast("从云端加载数据成功！");
+                } catch (error) {
+                    console.warn(error);
+                    this.showToast("未找到远端数据，已加载本地测试数据");
+                    this.initDefaultPresets();
+                    this.loadSampleData();
+                }
+
+                d3.select("#statusInfo").text("可自由缩放和平移");
+                this.updateAllSelects();
+                this.render();
+            }
+
+            async syncToCloud() {
+                const btn = d3.select("#btnSaveToCloud");
+                btn.text("保存中...").style("opacity", "0.7");
+                
+                // 将当前前端数据组装成严格符合 Pydantic Model 的数据
+                const payload = {
+                    graph_id: GRAPH_ID,
+                    name: "主工程图谱",
+                    themes: this.themes.map(t => ({
+                        id: t.id,
+                        name: t.name,
+                        defaultNodeStyleId: t.defaultNodeStyleId,
+                        defaultEdgeStyleId: t.defaultEdgeStyleId
+                    })),
+                    nodeStyles: this.nodeStyles.map(ns => ({
+                        id: ns.id, name: ns.name, color: ns.color, shape: ns.shape, opacity: ns.opacity
+                    })),
+                    edgeStyles: this.edgeStyles.map(es => ({
+                        id: es.id, name: es.name, color: es.color, style: es.style
+                    })),
+                    nodes: this.nodes.map(n => ({
+                        id: n.id, label: n.label, size: n.size, themeId: n.themeId, nodeStyleId: n.nodeStyleId
+                    })),
+                    links: this.links.map(l => ({
+                        id: l.id,
+                        source: typeof l.source === 'object' ? l.source.id : l.source,
+                        target: typeof l.target === 'object' ? l.target.id : l.target,
+                        label: l.label, width: l.width, themeId: l.themeId, edgeStyleId: l.edgeStyleId
+                    }))
+                };
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/graphs/${GRAPH_ID}/data`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (response.ok) {
+                        this.showToast("✅ 已成功保存到 MySQL 数据库！", 3000);
+                    } else {
+                        const err = await response.json();
+                        alert("保存失败: " + JSON.stringify(err));
+                    }
+                } catch(err) {
+                    alert("网络错误无法连接后端: " + err);
+                } finally {
+                    btn.text("💾 保存到云端").style("opacity", "1");
+                }
+            }
+
+            initDefaultPresets() {
+                this.nodeStyles = [
+                    { id: 'NS1', name: '核心主节点', color: '#3498db', shape: 'circle', opacity: 1 },
+                    { id: 'NS2', name: '预警节点', color: '#e74c3c', shape: 'star', opacity: 1 },
+                    { id: 'NS3', name: '辅助背景节点', color: '#2ecc71', shape: 'square', opacity: 0.6 }
+                ];
+                this.edgeStyles = [
+                    { id: 'ES1', name: '标准实线', color: '#95a5a6', style: 'solid' },
+                    { id: 'ES2', name: '强调红线', color: '#e74c3c', style: 'solid' },
+                    { id: 'ES3', name: '弱化虚线', color: '#bdc3c7', style: 'dashed' }
+                ];
+                this.themes = [
+                    { id: 'T1', name: '系统架构', defaultNodeStyleId: 'NS1', defaultEdgeStyleId: 'ES1' },
+                    { id: 'T2', name: '风险要素', defaultNodeStyleId: 'NS2', defaultEdgeStyleId: 'ES2' },
+                    { id: 'T3', name: '环境背景', defaultNodeStyleId: 'NS3', defaultEdgeStyleId: 'ES3' }
+                ];
+                this.resourceIdCounter = 4;
+                this.visibleThemes = new Set(['T1', 'T2', 'T3']);
+                this.activeCreateThemeId = 'T1';
+            }
+
+            // ==========================================
+            // 工具与 UI 模块
+            // ==========================================
+            showToast(msg, duration = 2000) {
+                const toast = d3.select("#toast");
+                toast.text(msg).style("opacity", 1);
+                setTimeout(() => toast.style("opacity", 0), duration);
+            }
+
+            asyncConfirm(msg) {
+                return new Promise(resolve => {
+                    d3.select("#confirmMsg").text(msg);
+                    d3.select("#confirmDialog").style("display", "flex");
+                    d3.select("#confirmOk").on("click", () => { d3.select("#confirmDialog").style("display", "none"); resolve(true); });
+                    d3.select("#confirmCancel").on("click", () => { d3.select("#confirmDialog").style("display", "none"); resolve(false); });
+                });
+            }
+
+            initD3() {
+                this.svg = d3.select("#graph-svg");
+                this.mainG = d3.select("#main-group");
+                
+                this.zoom = d3.zoom()
+                    .scaleExtent([0.1, 5])
+                    .filter(event => !event.shiftKey && event.type !== 'dblclick')
+                    .on("zoom", (event) => {
+                        this.currentTransform = event.transform;
+                        this.mainG.attr("transform", event.transform);
+                    });
+                this.svg.call(this.zoom);
+
+                this.simulation = d3.forceSimulation()
+                    .alphaDecay(0.05)
+                    .velocityDecay(0.6)
+                    .force("link", d3.forceLink().id(d => d.id).distance(120))
+                    .force("charge", d3.forceManyBody().strength(-500))
+                    .force("center", d3.forceCenter(this.svg.node().clientWidth / 2, this.svg.node().clientHeight / 2))
+                    .force("collision", d3.forceCollide().radius(35));
+            }
+
+            initEvents() {
+                const self = this;
+                d3.selectAll('input[name="mode"]').on("change", (e) => this.setMode(e.target.value));
+
+                this.svg.on("mousedown", (event) => {
+                    if (this.mode !== 'edit') return;
+                    if (event.shiftKey && event.target.id === 'graph-svg') {
+                        this.isBrushing = true;
+                        this.brushStartPoint = d3.pointer(event, this.svg.node());
+                        d3.select("#selection-box").style("display", "block")
+                            .attr("x", this.brushStartPoint[0]).attr("y", this.brushStartPoint[1])
+                            .attr("width", 0).attr("height", 0);
+                    } else if (event.target.id === 'graph-svg') {
+                        this.clearSelection();
+                        this.closeProperties();
+                    }
+                });
+
+                this.svg.on("mousemove", (event) => {
+                    if (this.mode !== 'edit' || !this.isBrushing) return;
+                    const currentPos = d3.pointer(event, this.svg.node());
+                    const x = Math.min(this.brushStartPoint[0], currentPos[0]);
+                    const y = Math.min(this.brushStartPoint[1], currentPos[1]);
+                    const w = Math.abs(currentPos[0] - this.brushStartPoint[0]);
+                    const h = Math.abs(currentPos[1] - this.brushStartPoint[1]);
+                    d3.select("#selection-box").attr("x", x).attr("y", y).attr("width", w).attr("height", h);
+
+                    const p1 = this.currentTransform.invert([x, y]);
+                    const p2 = this.currentTransform.invert([x+w, y+h]);
+
+                    this.nodes.forEach(n => {
+                        if (this.visibleThemes.has(n.themeId)) {
+                            n.selected = (n.x >= p1[0] && n.x <= p2[0] && n.y >= p1[1] && n.y <= p2[1]);
+                        }
+                    });
+                    this.render();
+                });
+
+                window.addEventListener("mouseup", () => {
+                    if (this.isBrushing) { this.isBrushing = false; d3.select("#selection-box").style("display", "none"); }
+                    if (this.isLinking) {
+                        this.isLinking = false; d3.select("#ghost-line").style("display", "none");
+                        this.linkSourceNode = null;
+                    }
+                });
+
+                this.svg.on("dblclick", (event) => {
+                    if (this.mode === 'edit' && event.target.id === 'graph-svg') {
+                        const [x, y] = this.currentTransform.invert(d3.pointer(event));
+                        this.addNode(x, y);
+                    }
+                });
+
+                d3.select("body").on("keydown", (event) => {
+                    if (this.mode === 'edit' && (event.key === "Delete" || event.key === "Backspace")) {
+                        if (event.target.tagName !== "INPUT" && event.target.tagName !== "SELECT") {
+                            this.deleteSelected();
+                        }
+                    }
+                });
+
+                d3.select("#propertiesForm").on("submit", (e) => { e.preventDefault(); this.saveProperties(); });
+                d3.select("#rmForm").on("submit", (e) => { e.preventDefault(); this.rmSave(); });
+
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.multi-select')) {
+                        document.getElementById('ms-dropdown').classList.remove('open');
+                    }
+                });
+            }
+
+            updateAllSelects() {
+                this.populateSelect("#defaultCreateTheme", this.themes, this.activeCreateThemeId, (e) => { this.activeCreateThemeId = e.target.value; });
+                this.populateSelect("#propTheme", this.themes);
+                this.populateSelect("#propNodeStyle", this.nodeStyles);
+                this.populateSelect("#propEdgeStyle", this.edgeStyles);
+                this.populateSelect("#rmThemeNodeStyle", this.nodeStyles);
+                this.populateSelect("#rmThemeEdgeStyle", this.edgeStyles);
+                this.updateMultiSelectUI();
+            }
+
+            populateSelect(selector, dataArray, selectedValue = null, onChange = null) {
+                const el = d3.select(selector);
+                el.selectAll("*").remove();
+                dataArray.forEach(item => { el.append("option").attr("value", item.id).text(item.name); });
+                if(selectedValue) el.node().value = selectedValue;
+                if(onChange) el.on("change", onChange);
+            }
+
+            updateMultiSelectUI() {
+                const dropdown = d3.select("#ms-dropdown");
+                dropdown.selectAll("*").remove();
+                this.themes.forEach(t => {
+                    const label = dropdown.append("label").attr("class", "ms-option");
+                    label.append("input").attr("type", "checkbox").attr("value", t.id)
+                        .property("checked", this.visibleThemes.has(t.id))
+                        .on("change", (e) => {
+                            if(e.target.checked) this.visibleThemes.add(t.id); else this.visibleThemes.delete(t.id);
+                            this.updateMultiSelectText(); this.render();
+                        });
+                    label.append("span").text(t.name);
+                });
+                this.updateMultiSelectText();
+            }
+
+            updateMultiSelectText() {
+                const textSpan = document.getElementById('ms-text');
+                if(this.visibleThemes.size === this.themes.length) textSpan.innerText = "已显示全部图层";
+                else if(this.visibleThemes.size === 0) textSpan.innerText = "全部隐藏";
+                else textSpan.innerText = `已选 ${this.visibleThemes.size} 个图层`;
+            }
+
+            // ==========================================
+            // 画布交互与渲染
+            // ==========================================
+            setMode(newMode) {
+                this.mode = newMode;
+                const status = d3.select("#statusInfo");
+                if (this.mode === 'edit') {
+                    this.nodes.forEach(n => { n.fx = n.x; n.fy = n.y; n.vx = 0; n.vy = 0; });
+                    this.simulation.alpha(0).stop();
+                    status.text("✏️ 编辑模式: 双击元素分配样式，Shift拖拽连线");
+                    this.svg.style("cursor", "crosshair");
+                } else {
+                    this.nodes.forEach(n => { n.fx = null; n.fy = null; });
+                    this.clearSelection();
+                    this.closeProperties();
+                    this.simulation.alpha(1).restart();
+                    status.text("👁️ 浏览模式: 布局自动调整中，可自由缩放和平移");
+                    this.svg.style("cursor", "grab");
+                }
+                this.render();
+            }
+
+            addNode(x, y) {
+                const theme = this.themes.find(t => t.id === this.activeCreateThemeId) || this.themes[0];
+                const newNode = {
+                    id: `N${this.nodeIdCounter++}`, label: `新节点`, x: x, y: y, 
+                    themeId: theme.id, nodeStyleId: theme.defaultNodeStyleId, size: 22, selected: true
+                };
+                if (this.mode === 'edit') { newNode.fx = x; newNode.fy = y; }
+                this.clearSelection();
+                this.nodes.push(newNode);
+                if(!this.visibleThemes.has(theme.id)) { this.visibleThemes.add(theme.id); this.updateMultiSelectUI(); }
+                this.render();
+                if(this.mode === 'edit') this.manualTick();
+            }
+
+            addEdge(source, target) {
+                if (source === target) return;
+                const sid = source.id || source, tid = target.id || target;
+                if (this.links.find(l => {
+                    const lsid = l.source.id || l.source;
+                    const ltid = l.target.id || l.target;
+                    return (lsid === sid && ltid === tid) || (lsid === tid && ltid === sid);
+                })) return;
+
+                const theme = this.themes.find(t => t.id === this.activeCreateThemeId) || this.themes[0];
+                const newLink = {
+                    id: `E${this.linkIdCounter++}`, source: source, target: target, label: "关联", width: 2,
+                    themeId: theme.id, edgeStyleId: theme.defaultEdgeStyleId, selected: false
+                };
+                this.links.push(newLink);
+                this.render();
+                if(this.mode === 'edit') this.manualTick();
+            }
+
+            getNodeStyle(id) { return this.nodeStyles.find(s => s.id === id) || this.nodeStyles[0]; }
+            getEdgeStyle(id) { return this.edgeStyles.find(s => s.id === id) || this.edgeStyles[0]; }
+
+            getSymbolGenerator(shape, size) {
+                let type;
+                switch(shape) {
+                    case 'square': type = d3.symbolSquare; break;
+                    case 'triangle': type = d3.symbolTriangle; break;
+                    case 'star': type = d3.symbolStar; break;
+                    case 'diamond': type = d3.symbolDiamond; break;
+                    case 'circle': default: type = d3.symbolCircle;
+                }
+                return d3.symbol().type(type).size(size * size * 3.14)();
+            }
+
+            render() {
+                const self = this;
+
+                const link = this.mainG.select("#links-group").selectAll(".link").data(this.links, d => d.id);
+                link.exit().remove();
+                const linkEnter = link.enter().append("line")
+                    .attr("class", "link").attr("marker-end", "url(#arrowhead)")
+                    .on("click", (e, d) => {
+                        if (self.mode === 'edit') { e.stopPropagation(); if (!e.shiftKey) self.clearSelection(); d.selected = true; self.render(); }
+                    })
+                    .on("dblclick", (e, d) => { if (self.mode === 'edit') { e.stopPropagation(); self.openProperties(d, 'edge'); } });
+
+                const linkCombined = linkEnter.merge(link)
+                    .attr("stroke", d => self.getEdgeStyle(d.edgeStyleId).color)
+                    .attr("stroke-width", d => d.width)
+                    .attr("stroke-dasharray", d => self.getEdgeStyle(d.edgeStyleId).style === 'dashed' ? "6,6" : "none")
+                    .classed("selected", d => d.selected)
+                    .attr("marker-end", d => d.selected ? "url(#arrowhead-selected)" : "url(#arrowhead)")
+                    .style("display", d => {
+                        const sTheme = (typeof d.source === 'object') ? d.source.themeId : (self.nodes.find(n=>n.id===d.source)?.themeId);
+                        const tTheme = (typeof d.target === 'object') ? d.target.themeId : (self.nodes.find(n=>n.id===d.target)?.themeId);
+                        return (self.visibleThemes.has(sTheme) && self.visibleThemes.has(tTheme)) ? "block" : "none";
+                    });
+
+                const nodeDrag = d3.drag()
+                    .filter(event => self.mode === 'edit')
+                    .on("start", function(event, d) {
+                        if (event.sourceEvent.shiftKey) { self.isLinking = true; self.linkSourceNode = d; }
+                        else { if (!d.selected) { self.clearSelection(); d.selected = true; self.render(); } }
+                    })
+                    .on("drag", function(event, d) {
+                        if (self.isLinking) {
+                            d3.select("#ghost-line").style("display", "block").attr("x1", self.linkSourceNode.x).attr("y1", self.linkSourceNode.y).attr("x2", event.x).attr("y2", event.y);
+                        } else {
+                            const dx = event.dx / self.currentTransform.k, dy = event.dy / self.currentTransform.k;
+                            self.nodes.filter(n => n.selected).forEach(n => { n.x += dx; n.y += dy; n.fx = n.x; n.fy = n.y; });
+                            self.manualTick();
+                        }
+                    })
+                    .on("end", function(event, d) {
+                        if (self.isLinking) {
+                            self.isLinking = false; d3.select("#ghost-line").style("display", "none");
+                            if (self.hoveredNode && self.hoveredNode !== self.linkSourceNode) self.addEdge(self.linkSourceNode, self.hoveredNode);
+                            self.linkSourceNode = null;
+                        }
+                    });
+
+                const node = this.mainG.select("#nodes-group").selectAll(".node").data(this.nodes, d => d.id);
+                node.exit().remove();
+                const nodeEnter = node.enter().append("path")
+                    .attr("class", "node").call(nodeDrag)
+                    .on("click", (e, d) => {
+                        if (self.mode === 'edit') { e.stopPropagation(); if (!e.shiftKey) self.clearSelection(); d.selected = true; self.render(); }
+                    })
+                    .on("dblclick", (e, d) => { if (self.mode === 'edit') { e.stopPropagation(); self.openProperties(d, 'node'); } })
+                    .on("mouseover", (e, d) => {
+                        self.hoveredNode = d;
+                        const tName = (self.themes.find(t=>t.id===d.themeId)||{}).name || '未知';
+                        const sName = self.getNodeStyle(d.nodeStyleId).name;
+                        d3.select("#tooltip").style("opacity", 1).html(`${d.label}<br/><small>[${tName}] - ${sName}</small>`)
+                            .style("left", (e.pageX + 10)+"px").style("top", (e.pageY - 35)+"px");
+                    })
+                    .on("mouseout", () => { self.hoveredNode = null; d3.select("#tooltip").style("opacity", 0); });
+
+                const nodeCombined = nodeEnter.merge(node)
+                    .attr("d", d => self.getSymbolGenerator(self.getNodeStyle(d.nodeStyleId).shape, d.size))
+                    .attr("fill", d => self.getNodeStyle(d.nodeStyleId).color)
+                    .attr("opacity", d => self.getNodeStyle(d.nodeStyleId).opacity)
+                    .classed("selected", d => d.selected)
+                    .style("display", d => self.visibleThemes.has(d.themeId) ? "block" : "none");
+
+                const nodeLabels = this.mainG.select("#labels-group").selectAll(".node-label").data(this.nodes, d => d.id);
+                nodeLabels.exit().remove();
+                const nodeLabelsCombined = nodeLabels.enter().append("text")
+                    .attr("class", "node-label").attr("text-anchor", "middle").merge(nodeLabels).text(d => d.label)
+                    .style("display", d => self.visibleThemes.has(d.themeId) ? "block" : "none");
+
+                if (this.mode === 'view') {
+                    this.simulation.nodes(this.nodes);
+                    this.simulation.force("link").links(this.links);
+                    this.simulation.on("tick", () => this.updatePositions(linkCombined, nodeCombined, nodeLabelsCombined));
+                    this.simulation.alpha(1).restart();
+                } else {
+                    this.updatePositions(linkCombined, nodeCombined, nodeLabelsCombined);
+                }
+
+                this.updateSelectionSidebar();
+                if (this.editingItem && !this.editingItem.selected) this.closeProperties(); 
+            }
+
+            updatePositions(links, nodes, labels) {
+                links.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+                nodes.attr("transform", d => `translate(${d.x}, ${d.y})`);
+                labels.attr("x", d => d.x).attr("y", d => d.y - (d.size + 8));
+            }
+
+            manualTick() { this.updatePositions(this.mainG.selectAll(".link"), this.mainG.selectAll(".node"), this.mainG.selectAll(".node-label")); }
+
+            // ==========================================
+            // 属性分配与资源库面板
+            // ==========================================
+            openProperties(item, type) {
+                this.editingItem = item;
+                this.editingType = type;
+                if(!item.selected) { this.clearSelection(); item.selected = true; this.render(); }
+
+                d3.select("#propertiesPanel").classed("open", true);
+                d3.select("#propLabel").node().value = item.label;
+                d3.select("#propTheme").node().value = item.themeId || this.activeCreateThemeId;
+                
+                if (type === 'node') {
+                    d3.select("#propNodeFields").style("display", "block"); d3.select("#propEdgeFields").style("display", "none");
+                    d3.select("#propNodeStyle").node().value = item.nodeStyleId;
+                } else {
+                    d3.select("#propNodeFields").style("display", "none"); d3.select("#propEdgeFields").style("display", "block");
+                    d3.select("#propEdgeStyle").node().value = item.edgeStyleId;
+                }
+            }
+
+            saveProperties() {
+                if (!this.editingItem) return;
+                this.editingItem.label = d3.select("#propLabel").node().value;
+                this.editingItem.themeId = d3.select("#propTheme").node().value;
+                if (this.editingType === 'node') this.editingItem.nodeStyleId = d3.select("#propNodeStyle").node().value;
+                else this.editingItem.edgeStyleId = d3.select("#propEdgeStyle").node().value;
+                this.render();
+            }
+
+            closeProperties() { d3.select("#propertiesPanel").classed("open", false); this.editingItem = null; }
+
+            openResourceManager() { d3.select("#resourceManagerModal").style("display", "flex"); this.rmSwitchTab('themes'); }
+            closeResourceManager() { d3.select("#resourceManagerModal").style("display", "none"); this.updateAllSelects(); this.render(); }
+
+            rmSwitchTab(tabName) {
+                this.rmActiveTab = tabName;
+                d3.selectAll(".modal-tab").classed("active", false); d3.select(`.modal-tab[data-tab="${tabName}"]`).classed("active", true);
+                d3.select("#formThemes").style("display", tabName === 'themes' ? "block" : "none");
+                d3.select("#formNodeStyles").style("display", tabName === 'nodeStyles' ? "block" : "none");
+                d3.select("#formEdgeStyles").style("display", tabName === 'edgeStyles' ? "block" : "none");
+                this.rmRenderList();
+                const list = this.getListData();
+                if(list.length > 0) this.rmSelectItem(list[0].id); else d3.select("#rmEditPane").style("display", "none");
+            }
+
+            getListData() { return this.rmActiveTab === 'themes' ? this.themes : (this.rmActiveTab === 'nodeStyles' ? this.nodeStyles : this.edgeStyles); }
+
+            rmRenderList() {
+                const list = d3.select("#rmList"); list.selectAll("*").remove();
+                this.getListData().forEach(item => {
+                    const el = list.append("div").attr("class", `tm-item ${item.id === this.rmEditingId ? 'active' : ''}`).on("click", () => this.rmSelectItem(item.id));
+                    let color = '#ccc';
+                    if(this.rmActiveTab === 'themes') color = this.getNodeStyle(item.defaultNodeStyleId).color;
+                    else color = item.color;
+                    el.append("div").attr("class", "tm-color-dot").style("background", color);
+                    el.append("span").text(item.name);
+                });
+            }
+
+            rmSelectItem(id) {
+                this.rmEditingId = id; this.rmRenderList(); d3.select("#rmEditPane").style("display", "block");
+                const item = this.getListData().find(x => x.id === id);
+                if(!item) return;
+                d3.select("#rmName").node().value = item.name;
+                
+                if (this.rmActiveTab === 'themes') {
+                    d3.select("#rmThemeNodeStyle").node().value = item.defaultNodeStyleId; d3.select("#rmThemeEdgeStyle").node().value = item.defaultEdgeStyleId;
+                } else if (this.rmActiveTab === 'nodeStyles') {
+                    d3.select("#rmNodeColor").node().value = item.color; d3.select("#rmNodeShape").node().value = item.shape; d3.select("#rmNodeOpacity").node().value = item.opacity;
+                } else {
+                    d3.select("#rmEdgeColor").node().value = item.color; d3.select("#rmEdgeStyle").node().value = item.style;
+                }
+            }
+
+            rmCreateNew() {
+                let newItem;
+                if (this.rmActiveTab === 'themes') {
+                    newItem = { id: `T${this.resourceIdCounter++}`, name: '新主题', defaultNodeStyleId: this.nodeStyles[0].id, defaultEdgeStyleId: this.edgeStyles[0].id };
+                    this.themes.push(newItem); this.visibleThemes.add(newItem.id);
+                } else if (this.rmActiveTab === 'nodeStyles') {
+                    newItem = { id: `NS${this.resourceIdCounter++}`, name: '新节点样式', color: '#9b59b6', shape: 'circle', opacity: 1 };
+                    this.nodeStyles.push(newItem);
+                } else {
+                    newItem = { id: `ES${this.resourceIdCounter++}`, name: '新连线样式', color: '#95a5a6', style: 'solid' };
+                    this.edgeStyles.push(newItem);
+                }
+                this.updateAllSelects(); this.rmSelectItem(newItem.id);
+            }
+
+            rmSave() {
+                if(!this.rmEditingId) return;
+                const item = this.getListData().find(x => x.id === this.rmEditingId);
+                item.name = d3.select("#rmName").node().value;
+                if (this.rmActiveTab === 'themes') {
+                    item.defaultNodeStyleId = d3.select("#rmThemeNodeStyle").node().value; item.defaultEdgeStyleId = d3.select("#rmThemeEdgeStyle").node().value;
+                } else if (this.rmActiveTab === 'nodeStyles') {
+                    item.color = d3.select("#rmNodeColor").node().value; item.shape = d3.select("#rmNodeShape").node().value; item.opacity = parseFloat(d3.select("#rmNodeOpacity").node().value);
+                } else {
+                    item.color = d3.select("#rmEdgeColor").node().value; item.style = d3.select("#rmEdgeStyle").node().value;
+                }
+                this.rmRenderList(); this.updateAllSelects(); this.render(); 
+                this.showToast("已修改本地资源缓存");
+            }
+
+            async rmDeleteCurrent() {
+                const data = this.getListData();
+                if(data.length <= 1) { this.showToast("该类别下必须保留至少一个选项！"); return; }
+                const confirmed = await this.asyncConfirm("危险操作：确定要删除此项吗？所有相关引用会被重置！");
+                if(!confirmed) return;
+
+                if (this.rmActiveTab === 'themes') {
+                    this.themes = this.themes.filter(x => x.id !== this.rmEditingId);
+                    this.nodes.forEach(n => { if(n.themeId === this.rmEditingId) n.themeId = this.themes[0].id; });
+                    this.links.forEach(l => { if(l.themeId === this.rmEditingId) l.themeId = this.themes[0].id; });
+                    this.visibleThemes.delete(this.rmEditingId);
+                    if(this.activeCreateThemeId === this.rmEditingId) this.activeCreateThemeId = this.themes[0].id;
+                } else if (this.rmActiveTab === 'nodeStyles') {
+                    this.nodeStyles = this.nodeStyles.filter(x => x.id !== this.rmEditingId);
+                    this.nodes.forEach(n => { if(n.nodeStyleId === this.rmEditingId) n.nodeStyleId = this.nodeStyles[0].id; });
+                    this.themes.forEach(t => { if(t.defaultNodeStyleId === this.rmEditingId) t.defaultNodeStyleId = this.nodeStyles[0].id; });
+                } else {
+                    this.edgeStyles = this.edgeStyles.filter(x => x.id !== this.rmEditingId);
+                    this.links.forEach(l => { if(l.edgeStyleId === this.rmEditingId) l.edgeStyleId = this.edgeStyles[0].id; });
+                    this.themes.forEach(t => { if(t.defaultEdgeStyleId === this.rmEditingId) t.defaultEdgeStyleId = this.edgeStyles[0].id; });
+                }
+                this.updateAllSelects(); this.rmSelectItem(this.getListData()[0].id); this.render();
+            }
+
+            // ==========================================
+            // 其他操作
+            // ==========================================
+            clearSelection() { this.nodes.forEach(n => n.selected = false); this.links.forEach(l => l.selected = false); this.render(); }
+
+            deleteSelected() {
+                if(this.mode !== 'edit') return;
+                const selectedNodes = this.nodes.filter(n => n.selected).map(n => n.id);
+                this.nodes = this.nodes.filter(n => !n.selected);
+                this.links = this.links.filter(l => {
+                    const sid = l.source.id || l.source;
+                    const tid = l.target.id || l.target;
+                    return !l.selected && !selectedNodes.includes(sid) && !selectedNodes.includes(tid);
+                });
+                this.closeProperties(); this.render();
+                if(this.mode === 'edit') this.manualTick();
+            }
+
+            updateSelectionSidebar() {
+                const list = d3.select("#selectionList"); list.selectAll("*").remove();
+                const selectedNodes = this.nodes.filter(n => n.selected && this.visibleThemes.has(n.themeId));
+                const selectedLinks = this.links.filter(l => {
+                    const sTheme = (typeof l.source === 'object') ? l.source.themeId : (this.nodes.find(n=>n.id===l.source)?.themeId);
+                    const tTheme = (typeof l.target === 'object') ? l.target.themeId : (this.nodes.find(n=>n.id===l.target)?.themeId);
+                    return l.selected && this.visibleThemes.has(sTheme) && this.visibleThemes.has(tTheme);
+                });
+
+                if (selectedNodes.length === 0 && selectedLinks.length === 0) { list.append("div").style("color", "#aaa").style("font-size", "0.85rem").text("当前无选中项"); return; }
+                selectedNodes.forEach(n => { const style = this.getNodeStyle(n.nodeStyleId); list.append("div").attr("class", "list-card").html(`<span style="color:${style.color}">●</span> ${n.label}`); });
+                selectedLinks.forEach(l => { 
+                    const sLabel = (typeof l.source === 'object') ? l.source.label : (this.nodes.find(n=>n.id===l.source)?.label || '节点');
+                    const tLabel = (typeof l.target === 'object') ? l.target.label : (this.nodes.find(n=>n.id===l.target)?.label || '节点');
+                    list.append("div").attr("class", "list-card").html(`➖ ${sLabel} ➝ ${tLabel}`); 
+                });
+            }
+
+            loadSampleData() {
+                this.nodes = [
+                    { id: 'N1', label: '中心系统', x: 200, y: 200, themeId: 'T1', nodeStyleId: 'NS1', size: 22, selected: false },
+                    { id: 'N2', label: '重要组件A', x: 400, y: 250, themeId: 'T2', nodeStyleId: 'NS2', size: 22, selected: false },
+                    { id: 'N3', label: '重要组件B', x: 250, y: 350, themeId: 'T2', nodeStyleId: 'NS2', size: 22, selected: false },
+                    { id: 'N4', label: '背景数据', x: 500, y: 150, themeId: 'T3', nodeStyleId: 'NS3', size: 22, selected: false }
+                ];
+                this.links = [
+                    { id: 'E1', source: 'N1', target: 'N2', label: '', width: 2, themeId: 'T1', edgeStyleId: 'ES1', selected: false },
+                    { id: 'E2', source: 'N1', target: 'N3', label: '', width: 2, themeId: 'T1', edgeStyleId: 'ES1', selected: false },
+                    { id: 'E3', source: 'N2', target: 'N4', label: '', width: 2, themeId: 'T3', edgeStyleId: 'ES3', selected: false }
+                ];
+                this.nodeIdCounter = 5; this.linkIdCounter = 4;
+            }
+        }
+
+        const editor = new GraphEditor();
+    </script>
+</body>
+</html>

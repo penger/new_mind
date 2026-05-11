@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    container_name: graph_backend
+    environment:
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: "3306"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root123
+      MYSQL_DATABASE: graph_db
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: graph_frontend
+    ports:
+      - "8081:80"
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"

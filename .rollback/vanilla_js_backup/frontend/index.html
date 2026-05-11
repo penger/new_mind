@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>专业力导向图编辑器</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <header>
+        <div class="header-controls">
+            <h1>关系图谱专业版</h1>
+            <div class="status-bar" id="statusInfo">正在连接服务器...</div>
+        </div>
+
+        <div class="header-controls">
+            <div class="mode-toggle">
+                <input type="radio" id="mode-view" name="mode" value="view" checked>
+                <label for="mode-view">👁️ 浏览</label>
+                <input type="radio" id="mode-edit" name="mode" value="edit">
+                <label for="mode-edit">✏️ 编辑</label>
+            </div>
+            <button class="btn btn-outline" onclick="editor.openResourceManager()">⚙️ 资源管理</button>
+        </div>
+    </header>
+
+    <div class="main-wrapper">
+        <aside class="left-sidebar">
+            <div class="section-title">图层过滤 (按主题)</div>
+            <div class="form-group">
+                <select class="form-control" id="themeFilter"></select>
+            </div>
+
+            <div class="section-title" style="margin-top: 20px;">新建元素归属主题</div>
+            <div class="form-group">
+                <select class="form-control" id="defaultCreateTheme"></select>
+            </div>
+
+            <div class="section-title" style="margin-top: 20px;">当前选中元素</div>
+            <div id="selectionList" style="flex:1; overflow-y:auto;">
+                <div style="color:#aaa; font-size: 0.85rem;">当前无选中项</div>
+            </div>
+        </aside>
+
+        <main class="graph-area">
+            <svg id="graph-svg">
+                <defs>
+                    <marker id="arrowhead" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-5L10,0L0,5" fill="context-stroke" />
+                    </marker>
+                    <marker id="arrowhead-selected" viewBox="0 -5 10 10" refX="20" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-5L10,0L0,5" fill="#e74c3c" />
+                    </marker>
+                </defs>
+                <g id="main-group">
+                    <line id="ghost-line" x1="0" y1="0" x2="0" y2="0" />
+                    <g id="links-group"></g>
+                    <g id="nodes-group"></g>
+                    <g id="labels-group"></g>
+                </g>
+                <rect id="selection-box" x="0" y="0" width="0" height="0"></rect>
+            </svg>
+            <div id="tooltip" class="tooltip"></div>
+        </main>
+
+        <aside class="right-panel" id="propertiesPanel">
+            <div class="panel-header">
+                <h2>属性与样式分配</h2>
+                <div class="close-btn" onclick="editor.closeProperties()">×</div>
+            </div>
+            <div class="panel-body">
+                <form id="propertiesForm">
+                    <div class="form-group">
+                        <label>标签名称</label>
+                        <input type="text" id="propLabel" class="form-control" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>归属主题 (图层)</label>
+                        <select id="propTheme" class="form-control"></select>
+                    </div>
+
+                    <div id="propNodeFields">
+                        <div class="section-title" style="margin-top: 24px;">外观样式</div>
+                        <div class="form-group">
+                            <label>应用节点样式</label>
+                            <select id="propNodeStyle" class="form-control"></select>
+                        </div>
+                    </div>
+
+                    <div id="propEdgeFields" style="display:none;">
+                        <div class="section-title" style="margin-top: 24px;">外观样式</div>
+                        <div class="form-group">
+                            <label>应用连线样式</label>
+                            <select id="propEdgeStyle" class="form-control"></select>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:30px;">
+                        <button type="submit" class="btn btn-primary" style="flex:1;">确认修改</button>
+                    </div>
+                </form>
+            </div>
+        </aside>
+    </div>
+
+    <!-- 资源管理中心 -->
+    <div class="fullscreen-modal" id="resourceManagerModal">
+        <div class="tm-container">
+            <div class="tm-header">
+                <div class="modal-tabs">
+                    <div class="modal-tab active" data-tab="themes" onclick="editor.rmSwitchTab('themes')">🎨 主题管理</div>
+                    <div class="modal-tab" data-tab="nodeStyles" onclick="editor.rmSwitchTab('nodeStyles')">🟣 节点样式</div>
+                    <div class="modal-tab" data-tab="edgeStyles" onclick="editor.rmSwitchTab('edgeStyles')">➖ 连线样式</div>
+                </div>
+                <div class="close-btn" style="padding-bottom: 12px;" onclick="editor.closeResourceManager()">×</div>
+            </div>
+            <div class="tm-body">
+                <div class="tm-list-pane">
+                    <div class="tm-list" id="rmList"></div>
+                    <div style="padding: 12px; border-top: 1px solid var(--border-color);">
+                        <button class="btn btn-outline" style="width:100%;" onclick="editor.rmCreateNew()">+ 新建</button>
+                    </div>
+                </div>
+                <div class="tm-edit-pane" id="rmEditPane">
+                    <form id="rmForm">
+                        <div class="section-title">基础配置</div>
+                        <div class="form-group">
+                            <label>名称</label>
+                            <input type="text" id="rmName" class="form-control" required autocomplete="off">
+                        </div>
+
+                        <div id="formThemes" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">默认应用样式</div>
+                            <div class="form-group">
+                                <label>默认节点样式</label>
+                                <select id="rmThemeNodeStyle" class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>默认连线样式</label>
+                                <select id="rmThemeEdgeStyle" class="form-control"></select>
+                            </div>
+                        </div>
+
+                        <div id="formNodeStyles" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">视觉表现</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>填充颜色</label>
+                                    <input type="color" id="rmNodeColor" class="form-control" style="padding:2px; height:38px;">
+                                </div>
+                                <div class="form-group">
+                                    <label>节点形状</label>
+                                    <select id="rmNodeShape" class="form-control">
+                                        <option value="circle">圆形</option>
+                                        <option value="square">矩形</option>
+                                        <option value="triangle">三角形</option>
+                                        <option value="diamond">菱形</option>
+                                        <option value="star">星形</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>透明度</label>
+                                <input type="range" id="rmNodeOpacity" min="0.1" max="1" step="0.1" style="width:100%">
+                            </div>
+                        </div>
+
+                        <div id="formEdgeStyles" style="display:none;">
+                            <div class="section-title" style="margin-top:24px;">视觉表现</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>线条颜色</label>
+                                    <input type="color" id="rmEdgeColor" class="form-control" style="padding:2px; height:38px;">
+                                </div>
+                                <div class="form-group">
+                                    <label>线条样式</label>
+                                    <select id="rmEdgeStyle" class="form-control">
+                                        <option value="solid">实线</option>
+                                        <option value="dashed">虚线</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:10px; margin-top:40px; padding-top:20px; border-top:1px solid #eee;">
+                            <button type="submit" class="btn btn-primary" id="btnSaveResource">保存更改</button>
+                            <button type="button" class="btn btn-danger" onclick="editor.rmDeleteCurrent()">删除此项</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义确认弹窗 -->
+    <div class="dialog-overlay" id="confirmDialog">
+        <div class="dialog-box">
+            <h3 style="margin-bottom: 10px; font-size:1.1rem;">确认操作</h3>
+            <p id="confirmMsg" style="color:#7f8c8d; font-size:0.9rem; margin-bottom: 24px;"></p>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-danger" id="confirmOk" style="flex:1;">确认</button>
+                <button class="btn btn-outline" id="confirmCancel" style="flex:1;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">操作成功</div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
