@@ -8,18 +8,24 @@ router = APIRouter(prefix="/api", tags=["graphs"])
 
 
 @router.get("/data")
-def get_graph_data(db: Session = Depends(get_db)):
-    """获取图谱完整数据"""
+def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
+    """获取图谱完整数据，支持按主题过滤"""
     try:
         themes = db.query(Theme).all()
         node_styles = db.query(NodeStyle).all()
         edge_styles = db.query(EdgeStyle).all()
-        nodes = db.query(Node).all()
-        edges = db.query(Edge).all()
         
-        print(f"[DEBUG] 查询到的themes数量: {len(themes)}")
-        if themes:
-            print(f"[DEBUG] 第一个theme: id={themes[0].id}, sort_num={themes[0].sort_num}")
+        if theme_id:
+            nodes = db.query(Node).filter(Node.theme_id == theme_id).all()
+            node_ids = [n.id for n in nodes]
+            edges = db.query(Edge).filter(
+                Edge.theme_id == theme_id,
+                Edge.source_id.in_(node_ids),
+                Edge.target_id.in_(node_ids)
+            ).all()
+        else:
+            nodes = db.query(Node).all()
+            edges = db.query(Edge).all()
         
         return {
             "themes": [{"id": t.id, "name": t.name, "defaultNodeStyleId": t.default_node_style_id, "defaultEdgeStyleId": t.default_edge_style_id, "sortNum": t.sort_num if t.sort_num is not None else 0} for t in themes],
@@ -29,7 +35,6 @@ def get_graph_data(db: Session = Depends(get_db)):
             "links": [{"id": e.id, "source": e.source_id, "target": e.target_id, "label": e.label, "width": e.width, "themeId": e.theme_id, "edgeStyleId": e.edge_style_id, "content": e.content, "style": e.style} for e in edges]
         }
     except Exception as e:
-        print(f"[ERROR] get_graph_data failed: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -73,6 +78,19 @@ def update_graph_data(data: GraphDataModel, db: Session = Depends(get_db)):
 def create_node(node: NodeModel, db: Session = Depends(get_db)):
     """创建单个节点"""
     try:
+        existing = db.query(Node).filter(Node.id == node.id).first()
+        if existing:
+            max_id = db.query(Node).order_by(Node.id.desc()).first()
+            if max_id and max_id.id:
+                try:
+                    num = int(max_id.id.replace('N', ''))
+                    new_id = f"N{num + 1}"
+                except:
+                    new_id = f"N{max_id.id}"
+            else:
+                new_id = node.id
+            node = NodeModel(id=new_id, label=node.label, size=node.size, themeId=node.themeId, nodeStyleId=node.nodeStyleId, content=node.content, style=node.style)
+        
         db_node = Node(
             id=node.id,
             label=node.label,
@@ -84,7 +102,7 @@ def create_node(node: NodeModel, db: Session = Depends(get_db)):
         )
         db.add(db_node)
         db.commit()
-        return {"status": "success", "message": "Node created"}
+        return {"status": "success", "message": "Node created", "id": node.id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -125,6 +143,19 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
 def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
     """创建单个边"""
     try:
+        existing = db.query(Edge).filter(Edge.id == edge.id).first()
+        if existing:
+            max_id = db.query(Edge).order_by(Edge.id.desc()).first()
+            if max_id and max_id.id:
+                try:
+                    num = int(max_id.id.replace('E', ''))
+                    new_id = f"E{num + 1}"
+                except:
+                    new_id = f"E{max_id.id}"
+            else:
+                new_id = edge.id
+            edge = EdgeModel(id=new_id, source=edge.source, target=edge.target, label=edge.label, width=edge.width, themeId=edge.themeId, edgeStyleId=edge.edgeStyleId, content=edge.content, style=edge.style)
+        
         db_edge = Edge(
             id=edge.id,
             source_id=edge.source,
@@ -138,7 +169,7 @@ def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
         )
         db.add(db_edge)
         db.commit()
-        return {"status": "success", "message": "Edge created"}
+        return {"status": "success", "message": "Edge created", "id": edge.id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
