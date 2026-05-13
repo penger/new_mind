@@ -1,11 +1,6 @@
 <template>
   <div class="graph-container" ref="containerRef" style="width: 100%; height: 100%; position: relative;">
     <svg ref="svgRef" class="graph-2d-svg">
-      <defs>
-        <marker id="arrowhead" viewBox="0 -5 10 10" refX="25" refY="0" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0,-5L10,0L0,5" fill="#999" />
-        </marker>
-      </defs>
       <g ref="mainGroup">
         <line ref="ghostLineRef" style="stroke: #409eff; stroke-dasharray: 5; stroke-width: 2; display: none; pointer-events: none;" />
         <g id="links-group"></g>
@@ -81,7 +76,7 @@ const renderGraph = () => {
   const mainG = d3.select(mainGroup.value)
   
   mainG.select('#links-group').selectAll('.link').data(d3Links, d => d.id)
-    .join('line').attr('class', 'link').attr('marker-end', 'url(#arrowhead)')
+    .join('line').attr('class', 'link')
     .attr('stroke', d => d.style?.color || getEdgeStyle(d.edgeStyleId).color)
     .attr('stroke-width', d => d.width || 2)
     .attr('stroke-dasharray', d => d.style?.style === 'dashed' ? '6,6' : 'none')

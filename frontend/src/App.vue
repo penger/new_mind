@@ -85,7 +85,12 @@
             <el-divider content-position="left">视觉定制</el-divider>
             <el-form-item label="关联预设模板">
               <el-select v-model="editingItem.nodeStyleId" @change="onNodePresetChange" style="width: 100%">
-                <el-option v-for="s in nodeStyles" :key="s.id" :label="s.name" :value="s.id" />
+                <el-option v-for="s in nodeStyles" :key="s.id" :label="s.name" :value="s.id">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span :style="{ color: s.color, fontSize: '16px' }">●</span>
+                    <span>{{ s.name }}</span>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
             <el-row :gutter="15">
@@ -106,8 +111,15 @@
           <template v-if="editingItem.type === 'edge'">
             <el-divider content-position="left">连线样式</el-divider>
             <el-form-item label="关联预设样式">
-              <el-select v-model="editingItem.edgeStyleId" style="width: 100%">
-                <el-option v-for="s in edgeStyles" :key="s.id" :label="s.name" :value="s.id" />
+              <el-select v-model="editingItem.edgeStyleId" @change="onEdgePresetChange" style="width: 100%">
+                <el-option v-for="s in edgeStyles" :key="s.id" :label="s.name" :value="s.id">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="40" height="16">
+                      <line x1="0" y1="8" x2="40" y2="8" :stroke="s.color || '#999'" stroke-width="2" :stroke-dasharray="getEdgeDashArray(s.line_style)" stroke-linecap="round"/>
+                    </svg>
+                    <span>{{ s.name }}</span>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
             <el-row :gutter="15">
@@ -131,6 +143,14 @@
           </div>
         </el-form>
       </el-drawer>
+
+      <ResourceManager
+        v-model="isResourceManagerOpen"
+        :themes="themes"
+        :nodeStyles="nodeStyles"
+        :edgeStyles="edgeStyles"
+        @refresh="handleResourceRefresh"
+      />
     </div>
   </div>
 </template>
@@ -141,6 +161,7 @@ import { ElMessage } from 'element-plus'
 import { useGraphCore } from './composables/useGraphCore'
 import Graph2D from './components/Graph2D.vue'
 import Graph3DView from './components/Graph3DView.vue'
+import ResourceManager from './components/ResourceManager.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
@@ -149,6 +170,7 @@ const {
 } = useGraphCore()
 
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
+const isResourceManagerOpen = ref(false)
 const infoCardPos = reactive({ x: 0, y: 0 }), hoverItem = reactive({ label: '', content: '' })
 const editingItem = reactive({ id: '', label: '', content: '', style: {}, type: 'node', size: 18 })
 const selectedNodeIds = ref([]), graphArea = ref(null)
@@ -204,9 +226,23 @@ const deleteSelected = async () => {
   }
 }
 
+const getEdgeDashArray = (style) => {
+  if (style === 'dashed') return '8,4'
+  if (style === 'dotted') return '2,4'
+  return ''
+}
 const onNodePresetChange = (id) => { const p = getNodeStyle(id); if (p) { editingItem.style.color = p.color; editingItem.style.shape = p.shape } }
+const onEdgePresetChange = (id) => { 
+  const s = edgeStyles.value?.find(x => x.id === id); 
+  if (s) { 
+    editingItem.style.color = s.color; 
+    editingItem.style.width = s.width || 2; 
+    editingItem.style.style = s.line_style || 'solid'; 
+  } 
+}
 const onThemeFilterChangeHandler = () => onThemeFilterChange(activeThemeFilter.value)
-const openResourceManager = () => ElMessage.info('资源管理中...')
+const openResourceManager = () => { isResourceManagerOpen.value = true }
+const handleResourceRefresh = async () => { await fetchDataFromServer() }
 
 onMounted(async () => { await fetchDataFromServer() })
 </script>
