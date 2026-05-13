@@ -30,7 +30,7 @@ def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
         return {
             "themes": [{"id": t.id, "name": t.name, "defaultNodeStyleId": t.default_node_style_id, "defaultEdgeStyleId": t.default_edge_style_id, "sortNum": t.sort_num if t.sort_num is not None else 0} for t in themes],
             "nodeStyles": [{"id": ns.id, "name": ns.name, "color": ns.color, "shape": ns.shape, "opacity": ns.opacity} for ns in node_styles],
-            "edgeStyles": [{"id": es.id, "name": es.name, "color": es.color, "style": es.line_style} for es in edge_styles],
+            "edgeStyles": [{"id": es.id, "name": es.name, "color": es.color, "line_style": es.line_style} for es in edge_styles],
             "nodes": [{"id": n.id, "label": n.label, "size": n.size, "themeId": n.theme_id, "nodeStyleId": n.node_style_id, "content": n.content, "style": n.style} for n in nodes],
             "links": [{"id": e.id, "source": e.source_id, "target": e.target_id, "label": e.label, "width": e.width, "themeId": e.theme_id, "edgeStyleId": e.edge_style_id, "content": e.content, "style": e.style} for e in edges]
         }
@@ -52,7 +52,7 @@ def update_graph_data(data: GraphDataModel, db: Session = Depends(get_db)):
 
         # 更新或插入 EdgeStyles
         for es in data.edgeStyles:
-            db.merge(EdgeStyle(id=es.id, name=es.name, color=es.color, line_style=es.style))
+            db.merge(EdgeStyle(id=es.id, name=es.name, color=es.color, line_style=es.line_style))
 
         # 更新或插入 Themes
         for t in data.themes:
@@ -318,7 +318,7 @@ def create_edge_style(es: EdgeStyleModel, db: Session = Depends(get_db)):
             id=es.id,
             name=es.name,
             color=es.color,
-            line_style=es.style
+            line_style=es.line_style
         )
         db.add(db_es)
         db.commit()
@@ -332,7 +332,7 @@ def create_edge_style(es: EdgeStyleModel, db: Session = Depends(get_db)):
 def update_edge_style(es_id: str, es: EdgeStyleModel, db: Session = Depends(get_db)):
     """更新或插入单个连线样式（upsert）"""
     try:
-        db.merge(EdgeStyle(id=es.id, name=es.name, color=es.color, line_style=es.style))
+        db.merge(EdgeStyle(id=es.id, name=es.name, color=es.color, line_style=es.line_style))
         db.commit()
         return {"status": "success", "message": "EdgeStyle saved"}
     except Exception as e:

@@ -14,7 +14,7 @@ class EdgeStyleModel(BaseModel):
     id: str
     name: str
     color: str
-    style: str
+    line_style: str
 
 
 class ThemeModel(BaseModel):

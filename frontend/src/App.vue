@@ -114,10 +114,9 @@
               <el-select v-model="editingItem.edgeStyleId" @change="onEdgePresetChange" style="width: 100%">
                 <el-option v-for="s in edgeStyles" :key="s.id" :label="s.name" :value="s.id">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <svg width="40" height="16">
-                      <line x1="0" y1="8" x2="40" y2="8" :stroke="s.color || '#999'" stroke-width="2" :stroke-dasharray="getEdgeDashArray(s.line_style)" stroke-linecap="round"/>
-                    </svg>
+                    <span :style="{ backgroundColor: s.color || '#999', display: 'inline-block', width: '16px', height: '4px', borderRadius: '2px' }"></span>
                     <span>{{ s.name }}</span>
+                    <span style="color: #909399; font-size: 12px;">({{ getLineStyleName(s.line_style) }})</span>
                   </div>
                 </el-option>
               </el-select>
@@ -230,6 +229,10 @@ const getEdgeDashArray = (style) => {
   if (style === 'dashed') return '8,4'
   if (style === 'dotted') return '2,4'
   return ''
+}
+const getLineStyleName = (style) => {
+  const map = { solid: '实线', dashed: '虚线', dotted: '点线' }
+  return map[style] || style
 }
 const onNodePresetChange = (id) => { const p = getNodeStyle(id); if (p) { editingItem.style.color = p.color; editingItem.style.shape = p.shape } }
 const onEdgePresetChange = (id) => { 

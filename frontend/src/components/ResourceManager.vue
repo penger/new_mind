@@ -87,13 +87,11 @@
           </div>
           <el-table :data="filteredNodeStyles" border stripe size="small">
             <el-table-column prop="name" label="样式名称" min-width="120" />
-            <el-table-column label="外观预览" width="180" align="center">
+            <el-table-column label="外观预览" width="160" align="center">
               <template #default="{ row }">
-                <div class="visual-preview">
-                  <div class="shape-icon" :style="getNodePreviewStyle(row)">
-                    <span v-if="row.shape === 'star'">★</span>
-                  </div>
-                  <el-tag size="small" type="info" class="ml-2">{{ row.shape }}</el-tag>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span :style="{ backgroundColor: row.color, display: 'inline-block', width: '16px', height: '16px', borderRadius: row.shape === 'circle' ? '50%' : '2px' }"></span>
+                  <el-tag size="small" type="info">{{ row.shape }}</el-tag>
                 </div>
               </template>
             </el-table-column>
@@ -134,13 +132,10 @@
             <el-table-column prop="name" label="样式名称" min-width="120" />
             <el-table-column label="线型预览" width="200">
               <template #default="{ row }">
-                <svg width="150" height="24" class="edge-svg">
-                  <line :x1="0" :y1="12" :x2="150" :y2="12" 
-                    :stroke="row.color" 
-                    :stroke-width="3"
-                    :stroke-dasharray="getSvgDashArray(row.line_style)"
-                    stroke-linecap="round"/>
-                </svg>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span :style="{ backgroundColor: row.color, display: 'inline-block', width: '16px', height: '4px', borderRadius: '2px' }"></span>
+                  <el-tag size="small" type="info">{{ getLineStyleLabel(row.line_style) }}</el-tag>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="140" fixed="right" align="center">
@@ -210,8 +205,8 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="透明度控制">
-          <el-slider v-model="nodeStyleForm.opacity" :min="0" :max="1" :step="0.1" show-input />
+        <el-form-item label="透明度">
+          <el-slider v-model="nodeStyleForm.opacity" :min="0" :max="1" :step="0.1" :format-tooltip="v => (v * 100).toFixed(0) + '%'" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -294,53 +289,9 @@ const filteredEdgeStyles = computed(() => {
 })
 
 // 视觉预览辅助函数
-const getNodePreviewStyle = (style) => {
-  const base = {
-    backgroundColor: style.color,
-    opacity: style.opacity,
-    width: '24px',
-    height: '24px'
-  }
-  if (style.shape === 'circle') base.borderRadius = '50%'
-  if (style.shape === 'square') base.borderRadius = '2px'
-  if (style.shape === 'diamond') {
-    base.transform = 'rotate(45deg)'
-    base.width = '18px'
-    base.height = '18px'
-  }
-  if (style.shape === 'triangle') {
-    return {
-      width: 0,
-      height: 0,
-      borderLeft: '12px solid transparent',
-      borderRight: '12px solid transparent',
-      borderBottom: `24px solid ${style.color}`,
-      opacity: style.opacity
-    }
-  }
-  return base
-}
-
-const getEdgePreviewStyle = (style) => {
-  return {
-    height: '2px',
-    background: style.color,
-    borderTop: style.line_style === 'dashed' ? '2px dashed ' + style.color : 
-               style.line_style === 'dotted' ? '2px dotted ' + style.color :
-               '2px solid ' + style.color,
-    width: '100%'
-  }
-}
-
 const getLineStyleLabel = (style) => {
   const labels = { solid: '实线', dashed: '虚线', dotted: '点线' }
   return labels[style] || style
-}
-
-const getSvgDashArray = (style) => {
-  if (style === 'dashed') return '10,5'
-  if (style === 'dotted') return '3,3'
-  return 'none'
 }
 
 // 表单与 Dialog 逻辑
@@ -497,57 +448,10 @@ const deleteEdgeStyle = async (id) => {
   flex-wrap: wrap;
 }
 
-.visual-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.shape-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 14px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.opacity-val {
-  font-size: 11px;
-  color: #909399;
-  margin-top: 2px;
-  display: block;
-}
-
-.edge-preview-container,
-.edge-preview-wrapper {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 0;
-}
-
-.edge-line {
-  width: 100%;
-  height: 4px;
-  border-radius: 2px;
-}
-
-.edge-type-text,
-.edge-type-label {
-  font-size: 12px;
-  color: #909399;
-  text-align: center;
-  margin-top: 6px;
-}
-
-.edge-svg {
-  display: block;
-  margin: 0 auto;
-}
-
 .w-full {
   width: 100%;
 }
+
 .ml-2 {
   margin-left: 8px;
 }
