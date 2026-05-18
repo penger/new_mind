@@ -83,15 +83,36 @@
 
           <template v-if="editingItem.type === 'node'">
             <el-divider content-position="left">视觉定制</el-divider>
-            <el-form-item label="关联预设模板">
-              <el-select v-model="editingItem.nodeStyleId" @change="onNodePresetChange" style="width: 100%">
-                <el-option v-for="s in nodeStyles" :key="s.id" :label="s.name" :value="s.id">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span :style="{ color: s.color, fontSize: '16px' }">●</span>
-                    <span>{{ s.name }}</span>
-                  </div>
-                </el-option>
+            <el-form-item label="关联预设模板 (仅显示当前主题默认样式)">
+              <el-select 
+                v-model="editingItem.nodeStyleId" 
+                @change="onNodePresetChange" 
+                style="width: 100%"
+                :disabled="currentThemeNodeStyles.length === 0"
+              >
+                <template v-if="currentThemeNodeStyles.length > 0">
+                  <el-option 
+                    v-for="s in currentThemeNodeStyles" 
+                    :key="s.id" 
+                    :label="s.name" 
+                    :value="s.id"
+                  >
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span :style="{ color: s.color, fontSize: '16px' }">●</span>
+                      <span>{{ s.name }}</span>
+                      <el-tag v-if="s.id === editingItem.nodeStyleId" size="small" type="success">已选</el-tag>
+                    </div>
+                  </el-option>
+                </template>
+                <template v-else>
+                  <el-option :disabled="true" value="">
+                    当前主题未设置默认节点样式
+                  </el-option>
+                </template>
               </el-select>
+              <div v-if="currentThemeId && currentThemeNodeStyles.length === 0" class="theme-info-hint">
+                提示：当前主题 <strong>{{ themes.value?.find(t => t.id === currentThemeId)?.name }}</strong> 未配置默认节点样式
+              </div>
             </el-form-item>
             <el-row :gutter="15">
               <el-col :span="10">
@@ -110,16 +131,37 @@
 
           <template v-if="editingItem.type === 'edge'">
             <el-divider content-position="left">连线样式</el-divider>
-            <el-form-item label="关联预设样式">
-              <el-select v-model="editingItem.edgeStyleId" @change="onEdgePresetChange" style="width: 100%">
-                <el-option v-for="s in edgeStyles" :key="s.id" :label="s.name" :value="s.id">
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span :style="{ backgroundColor: s.color || '#999', display: 'inline-block', width: '16px', height: '4px', borderRadius: '2px' }"></span>
-                    <span>{{ s.name }}</span>
-                    <span style="color: #909399; font-size: 12px;">({{ getLineStyleName(s.line_style) }})</span>
-                  </div>
-                </el-option>
+            <el-form-item label="关联预设样式 (仅显示当前主题默认样式)">
+              <el-select 
+                v-model="editingItem.edgeStyleId" 
+                @change="onEdgePresetChange" 
+                style="width: 100%"
+                :disabled="currentThemeEdgeStyles.length === 0"
+              >
+                <template v-if="currentThemeEdgeStyles.length > 0">
+                  <el-option 
+                    v-for="s in currentThemeEdgeStyles" 
+                    :key="s.id" 
+                    :label="s.name" 
+                    :value="s.id"
+                  >
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span :style="{ backgroundColor: s.color || '#999', display: 'inline-block', width: '16px', height: '4px', borderRadius: '2px' }"></span>
+                      <span>{{ s.name }}</span>
+                      <span style="color: #909399; font-size: 12px;">({{ getLineStyleName(s.line_style) }})</span>
+                      <el-tag v-if="s.id === editingItem.edgeStyleId" size="small" type="success">已选</el-tag>
+                    </div>
+                  </el-option>
+                </template>
+                <template v-else>
+                  <el-option :disabled="true" value="">
+                    当前主题未设置默认边样式
+                  </el-option>
+                </template>
               </el-select>
+              <div v-if="currentThemeId && currentThemeEdgeStyles.length === 0" class="theme-info-hint">
+                提示：当前主题 <strong>{{ themes.value?.find(t => t.id === currentThemeId)?.name }}</strong> 未配置默认边样式
+              </div>
             </el-form-item>
             <el-row :gutter="15">
               <el-col :span="12">
@@ -183,6 +225,46 @@ const selectedNodes = computed(() => {
 
 const statusText = computed(() => isEditing.value ? '✏️ 编辑模式: 位置已锁定，可手动调整' : '👁️ 浏览模式: 布局已自动优化')
 
+// 获取当前编辑节点的主题ID
+const currentThemeId = computed(() => {
+  if (!editingItem.id) return null
+  if (editingItem.type === 'node') {
+    // 如果是节点，返回节点的themeId
+    const node = nodes.value?.find(n => n.id === editingItem.id)
+    return node?.themeId || null
+  } else {
+    // 如果是边，返回边的themeId
+    const edge = links.value?.find(e => e.id === editingItem.id)
+    return edge?.themeId || null
+  }
+})
+
+// 获取当前主题的默认节点样式列表
+const currentThemeNodeStyles = computed(() => {
+  if (!currentThemeId.value) return []
+  
+  const theme = themes.value?.find(t => t.id === currentThemeId.value)
+  if (!theme || !theme.defaultNodeStyleIds || theme.defaultNodeStyleIds.length === 0) return []
+  
+  // 根据主题的defaultNodeStyleIds过滤nodeStyles
+  return nodeStyles.value?.filter(style => 
+    theme.defaultNodeStyleIds.includes(style.id)
+  ) || []
+})
+
+// 获取当前主题的默认边样式列表
+const currentThemeEdgeStyles = computed(() => {
+  if (!currentThemeId.value) return []
+  
+  const theme = themes.value?.find(t => t.id === currentThemeId.value)
+  if (!theme || !theme.defaultEdgeStyleIds || theme.defaultEdgeStyleIds.length === 0) return []
+  
+  // 根据主题的defaultEdgeStyleIds过滤edgeStyles
+  return edgeStyles.value?.filter(style => 
+    theme.defaultEdgeStyleIds.includes(style.id)
+  ) || []
+})
+
 const onNodeClick = (item) => {
   const isN = item.id?.startsWith('N');
   selectedNodeIds.value = isN ? [item.id] : [];
@@ -234,7 +316,13 @@ const getLineStyleName = (style) => {
   const map = { solid: '实线', dashed: '虚线', dotted: '点线' }
   return map[style] || style
 }
-const onNodePresetChange = (id) => { const p = getNodeStyle(id); if (p) { editingItem.style.color = p.color; editingItem.style.shape = p.shape } }
+const onNodePresetChange = (id) => { 
+  const p = currentThemeNodeStyles.value?.find(s => s.id === id) || getNodeStyle(id); 
+  if (p) { 
+    editingItem.style.color = p.color; 
+    editingItem.style.shape = p.shape 
+  } 
+}
 const onEdgePresetChange = (id) => { 
   const s = edgeStyles.value?.find(x => x.id === id); 
   if (s) { 
@@ -264,4 +352,25 @@ html, body, #app { margin: 0; padding: 0; height: 100vh; width: 100%; overflow: 
 .graph-area svg { display: block; width: 100%; height: 100%; }
 .info-card { position: absolute; background: rgba(255,255,255,0.95); border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); padding: 10px; z-index: 2000; pointer-events: none; border: 1px solid #ebeef5; max-width: 250px; }
 .empty-text { padding: 40px; text-align: center; color: #909399; font-size: 13px; }
+
+/* 主题信息提示样式 */
+.theme-info-hint {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #f0f9ff;
+  border: 1px solid #d1efff;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.theme-info-hint strong {
+  color: #409eff;
+  font-weight: 600;
+}
+
+/* 样式选择器中标签样式 */
+.el-select .el-tag {
+  margin-left: auto;
+}
 </style>

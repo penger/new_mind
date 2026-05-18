@@ -9,26 +9,40 @@ router = APIRouter(prefix="/api", tags=["graphs"])
 
 @router.get("/data")
 def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
-    """获取图谱完整数据，支持按主题过滤"""
     try:
         themes = db.query(Theme).all()
         node_styles = db.query(NodeStyle).all()
         edge_styles = db.query(EdgeStyle).all()
-        
         if theme_id:
             nodes = db.query(Node).filter(Node.theme_id == theme_id).all()
-            node_ids = [n.id for n in nodes]
             edges = db.query(Edge).filter(
                 Edge.theme_id == theme_id,
-                Edge.source_id.in_(node_ids),
-                Edge.target_id.in_(node_ids)
+                Edge.source_id.in_([n.id for n in nodes]),
+                Edge.target_id.in_([n.id for n in nodes])
             ).all()
         else:
             nodes = db.query(Node).all()
             edges = db.query(Edge).all()
         
+        # 格式化theme数据，包含分隔符字符串和解析后的数组
+        formatted_themes = []
+        for t in themes:
+            theme_data = {
+                "id": t.id,
+                "name": t.name,
+                "defaultNodeStyleId": t.default_node_style_id,
+                "defaultEdgeStyleId": t.default_edge_style_id,
+                "sortNum": t.sort_num if t.sort_num is not None else 0
+            }
+            # 添加解析后的数组
+            if t.default_node_style_id:
+                theme_data["defaultNodeStyleIds"] = ThemeModel.parse_style_ids(t.default_node_style_id)
+            if t.default_edge_style_id:
+                theme_data["defaultEdgeStyleIds"] = ThemeModel.parse_style_ids(t.default_edge_style_id)
+            formatted_themes.append(theme_data)
+        
         return {
-            "themes": [{"id": t.id, "name": t.name, "defaultNodeStyleId": t.default_node_style_id, "defaultEdgeStyleId": t.default_edge_style_id, "sortNum": t.sort_num if t.sort_num is not None else 0} for t in themes],
+            "themes": formatted_themes,
             "nodeStyles": [{"id": ns.id, "name": ns.name, "color": ns.color, "shape": ns.shape, "opacity": ns.opacity} for ns in node_styles],
             "edgeStyles": [{"id": es.id, "name": es.name, "color": es.color, "line_style": es.line_style} for es in edge_styles],
             "nodes": [{"id": n.id, "label": n.label, "size": n.size, "themeId": n.theme_id, "nodeStyleId": n.node_style_id, "content": n.content, "style": n.style} for n in nodes],
@@ -56,7 +70,18 @@ def update_graph_data(data: GraphDataModel, db: Session = Depends(get_db)):
 
         # 更新或插入 Themes
         for t in data.themes:
-            db.merge(Theme(id=t.id, name=t.name, default_node_style_id=t.defaultNodeStyleId, default_edge_style_id=t.defaultEdgeStyleId, sort_num=t.sortNum))
+            # 如果有数组格式的数据，优先使用数组序列化为分隔符字符串
+            if t.defaultNodeStyleIds:
+                node_style_str = ThemeModel.serialize_style_ids(t.defaultNodeStyleIds)
+            else:
+                node_style_str = t.defaultNodeStyleId
+                
+            if t.defaultEdgeStyleIds:
+                edge_style_str = ThemeModel.serialize_style_ids(t.defaultEdgeStyleIds)
+            else:
+                edge_style_str = t.defaultEdgeStyleId
+                
+            db.merge(Theme(id=t.id, name=t.name, default_node_style_id=node_style_str, default_edge_style_id=edge_style_str, sort_num=t.sortNum))
 
         # 更新或插入 Nodes
         for n in data.nodes:
@@ -214,11 +239,22 @@ def create_theme(theme: ThemeModel, db: Session = Depends(get_db)):
         max_sort = db.query(Theme.sort_num).order_by(Theme.sort_num.desc()).first()
         new_sort_num = (max_sort[0] + 1) if max_sort and max_sort[0] is not None else 1
         
+        # 处理样式ID字段：优先使用数组格式，否则使用原始的字符串
+        if theme.defaultNodeStyleIds:
+            node_style_str = ThemeModel.serialize_style_ids(theme.defaultNodeStyleIds)
+        else:
+            node_style_str = theme.defaultNodeStyleId
+            
+        if theme.defaultEdgeStyleIds:
+            edge_style_str = ThemeModel.serialize_style_ids(theme.defaultEdgeStyleIds)
+        else:
+            edge_style_str = theme.defaultEdgeStyleId
+        
         db_theme = Theme(
             id=theme.id,
             name=theme.name,
-            default_node_style_id=theme.defaultNodeStyleId,
-            default_edge_style_id=theme.defaultEdgeStyleId,
+            default_node_style_id=node_style_str,
+            default_edge_style_id=edge_style_str,
             sort_num=new_sort_num
         )
         db.add(db_theme)
@@ -233,7 +269,18 @@ def create_theme(theme: ThemeModel, db: Session = Depends(get_db)):
 def update_theme(theme_id: str, theme: ThemeModel, db: Session = Depends(get_db)):
     """更新或插入单个主题（upsert）"""
     try:
-        db.merge(Theme(id=theme.id, name=theme.name, default_node_style_id=theme.defaultNodeStyleId, default_edge_style_id=theme.defaultEdgeStyleId, sort_num=theme.sortNum))
+        # 处理样式ID字段：优先使用数组格式，否则使用原始的字符串
+        if theme.defaultNodeStyleIds:
+            node_style_str = ThemeModel.serialize_style_ids(theme.defaultNodeStyleIds)
+        else:
+            node_style_str = theme.defaultNodeStyleId
+            
+        if theme.defaultEdgeStyleIds:
+            edge_style_str = ThemeModel.serialize_style_ids(theme.defaultEdgeStyleIds)
+        else:
+            edge_style_str = theme.defaultEdgeStyleId
+            
+        db.merge(Theme(id=theme.id, name=theme.name, default_node_style_id=node_style_str, default_edge_style_id=edge_style_str, sort_num=theme.sortNum))
         db.commit()
         return {"status": "success", "message": "Theme saved"}
     except Exception as e:

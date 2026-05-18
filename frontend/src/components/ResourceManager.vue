@@ -42,17 +42,29 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="默认配置" width="280">
+            <el-table-column label="默认配置" width="320">
               <template #default="{ row }">
                 <div class="config-tags">
-                  <el-tooltip content="默认节点样式" placement="top">
-                    <el-tag size="small" effect="light" type="success">
-                      <el-icon><Avatar /></el-icon> {{ getNodeStyleName(row.defaultNodeStyleId) }}
+                  <el-tooltip 
+                    :content="row.defaultNodeStyleIds?.length > 0 ? row.defaultNodeStyleIds.join(', ') : '无默认节点样式'" 
+                    placement="top"
+                  >
+                    <el-tag size="small" effect="light" type="success" v-if="row.defaultNodeStyleIds?.length > 0">
+                      <el-icon><Avatar /></el-icon> {{ row.defaultNodeStyleIds?.length }} 个节点样式
+                    </el-tag>
+                    <el-tag size="small" effect="light" type="info" v-else>
+                      <el-icon><Avatar /></el-icon> 无节点样式
                     </el-tag>
                   </el-tooltip>
-                  <el-tooltip content="默认连线样式" placement="top">
-                    <el-tag size="small" effect="light" type="warning">
-                      <el-icon><Share /></el-icon> {{ getEdgeStyleName(row.defaultEdgeStyleId) }}
+                  <el-tooltip 
+                    :content="row.defaultEdgeStyleIds?.length > 0 ? row.defaultEdgeStyleIds.join(', ') : '无默认边样式'" 
+                    placement="top"
+                  >
+                    <el-tag size="small" effect="light" type="warning" v-if="row.defaultEdgeStyleIds?.length > 0">
+                      <el-icon><Share /></el-icon> {{ row.defaultEdgeStyleIds?.length }} 个边样式
+                    </el-tag>
+                    <el-tag size="small" effect="light" type="info" v-else>
+                      <el-icon><Share /></el-icon> 无边样式
                     </el-tag>
                   </el-tooltip>
                 </div>
@@ -159,22 +171,73 @@
         <el-form-item label="主题显示名称" required>
           <el-input v-model="themeForm.name" placeholder="请输入主题名称" />
         </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="默认节点样式">
-              <el-select v-model="themeForm.defaultNodeStyleId" placeholder="选择样式" class="w-full">
-                <el-option v-for="s in nodeStyles" :key="s.id" :label="s.name" :value="s.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="默认连线样式">
-              <el-select v-model="themeForm.defaultEdgeStyleId" placeholder="选择样式" class="w-full">
-                <el-option v-for="s in edgeStyles" :key="s.id" :label="s.name" :value="s.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="默认节点样式">
+          <div class="style-multi-select">
+            <el-select 
+              v-model="selectedNodeStyle" 
+              placeholder="选择节点样式添加到列表" 
+              class="w-full mb-2"
+              @change="addNodeStyle"
+            >
+              <el-option 
+                v-for="s in nodeStyles" 
+                :key="s.id" 
+                :label="s.name" 
+                :value="s.id"
+              />
+            </el-select>
+            
+            <div class="selected-styles" v-if="themeForm.defaultNodeStyleIds.length > 0">
+              <div v-for="styleId in themeForm.defaultNodeStyleIds" :key="styleId" class="style-item">
+                <el-tag 
+                  type="success" 
+                  size="small" 
+                  closable 
+                  @close="removeNodeStyle(styleId)"
+                >
+                  {{ getNodeStyleName(styleId) }}
+                </el-tag>
+              </div>
+            </div>
+            <div v-else class="empty-styles">
+              <el-text type="info">暂无选择的节点样式</el-text>
+            </div>
+          </div>
+        </el-form-item>
+        
+        <el-form-item label="默认连线样式">
+          <div class="style-multi-select">
+            <el-select 
+              v-model="selectedEdgeStyle" 
+              placeholder="选择连线样式添加到列表" 
+              class="w-full mb-2"
+              @change="addEdgeStyle"
+            >
+              <el-option 
+                v-for="s in edgeStyles" 
+                :key="s.id" 
+                :label="s.name" 
+                :value="s.id"
+              />
+            </el-select>
+            
+            <div class="selected-styles" v-if="themeForm.defaultEdgeStyleIds.length > 0">
+              <div v-for="styleId in themeForm.defaultEdgeStyleIds" :key="styleId" class="style-item">
+                <el-tag 
+                  type="warning" 
+                  size="small" 
+                  closable 
+                  @close="removeEdgeStyle(styleId)"
+                >
+                  {{ getEdgeStyleName(styleId) }}
+                </el-tag>
+              </div>
+            </div>
+            <div v-else class="empty-styles">
+              <el-text type="info">暂无选择的连线样式</el-text>
+            </div>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="themeDialogVisible = false">取消</el-button>
@@ -247,7 +310,7 @@
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElText } from 'element-plus'
 import { Collection, Coordinate, Connection, Plus, Search, Edit, Delete, Share, Avatar } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -303,12 +366,63 @@ const editingTheme = ref(null)
 const editingNodeStyle = ref(null)
 const editingEdgeStyle = ref(null)
 
-const themeForm = reactive({ id: '', name: '', defaultNodeStyleId: '', defaultEdgeStyleId: '' })
+// 多选相关变量
+const selectedNodeStyle = ref('')
+const selectedEdgeStyle = ref('')
+
+const themeForm = reactive({ 
+  id: '', 
+  name: '', 
+  defaultNodeStyleId: '', 
+  defaultEdgeStyleId: '',
+  defaultNodeStyleIds: [],  // 解析后的数组格式
+  defaultEdgeStyleIds: []   // 解析后的数组格式
+})
 const nodeStyleForm = reactive({ id: '', name: '', color: '#3498db', shape: 'circle', opacity: 1 })
 const edgeStyleForm = reactive({ id: '', name: '', color: '#95a5a6', line_style: 'solid' })
 
 const getNodeStyleName = (id) => props.nodeStyles.find(s => s.id === id)?.name || '-'
 const getEdgeStyleName = (id) => props.edgeStyles.find(s => s.id === id)?.name || '-'
+
+// 分隔符字符串处理函数
+const STYLE_ID_DELIMITER = ','
+
+const parseStyleIds = (styleIdsString) => {
+  if (!styleIdsString || styleIdsString === '') return []
+  return styleIdsString.split(STYLE_ID_DELIMITER)
+    .map(id => id.trim())
+    .filter(id => id.length > 0)
+}
+
+const serializeStyleIds = (styleIdsArray) => {
+  if (!styleIdsArray || styleIdsArray.length === 0) return ''
+  return styleIdsArray.join(STYLE_ID_DELIMITER)
+}
+
+// 多选样式处理函数
+const addNodeStyle = () => {
+  if (selectedNodeStyle.value && !themeForm.defaultNodeStyleIds.includes(selectedNodeStyle.value)) {
+    themeForm.defaultNodeStyleIds.push(selectedNodeStyle.value)
+    // 清空选择
+    selectedNodeStyle.value = ''
+  }
+}
+
+const removeNodeStyle = (styleId) => {
+  themeForm.defaultNodeStyleIds = themeForm.defaultNodeStyleIds.filter(id => id !== styleId)
+}
+
+const addEdgeStyle = () => {
+  if (selectedEdgeStyle.value && !themeForm.defaultEdgeStyleIds.includes(selectedEdgeStyle.value)) {
+    themeForm.defaultEdgeStyleIds.push(selectedEdgeStyle.value)
+    // 清空选择
+    selectedEdgeStyle.value = ''
+  }
+}
+
+const removeEdgeStyle = (styleId) => {
+  themeForm.defaultEdgeStyleIds = themeForm.defaultEdgeStyleIds.filter(id => id !== styleId)
+}
 
 // 通用保存封装
 const request = async (url, method, body, callback) => {
@@ -333,14 +447,44 @@ const request = async (url, method, body, callback) => {
 // 主题操作
 const openThemeDialog = (theme = null) => {
   editingTheme.value = theme
-  Object.assign(themeForm, theme || { id: `T_${Date.now()}`, name: '', defaultNodeStyleId: '', defaultEdgeStyleId: '' })
+  if (theme) {
+    // 解析theme数据
+    const themeData = {
+      id: theme.id,
+      name: theme.name,
+      defaultNodeStyleId: theme.defaultNodeStyleId || '',
+      defaultEdgeStyleId: theme.defaultEdgeStyleId || '',
+      defaultNodeStyleIds: parseStyleIds(theme.defaultNodeStyleId),
+      defaultEdgeStyleIds: parseStyleIds(theme.defaultEdgeStyleId)
+    }
+    Object.assign(themeForm, themeData)
+  } else {
+    Object.assign(themeForm, { 
+      id: `T_${Date.now()}`, 
+      name: '', 
+      defaultNodeStyleId: '', 
+      defaultEdgeStyleId: '',
+      defaultNodeStyleIds: [],
+      defaultEdgeStyleIds: []
+    })
+  }
   themeDialogVisible.value = true
 }
 
 const saveTheme = () => {
   const method = editingTheme.value?.id ? 'PUT' : 'POST'
   const url = editingTheme.value?.id ? `/api/themes/${editingTheme.value.id}` : '/api/themes'
-  request(url, method, themeForm, () => themeDialogVisible.value = false)
+  
+  // 准备发送的数据
+  const requestData = {
+    id: themeForm.id,
+    name: themeForm.name,
+    defaultNodeStyleIds: themeForm.defaultNodeStyleIds,
+    defaultEdgeStyleIds: themeForm.defaultEdgeStyleIds,
+    sortNum: editingTheme.value?.sortNum || 0
+  }
+  
+  request(url, method, requestData, () => themeDialogVisible.value = false)
 }
 
 const deleteTheme = async (id) => {
@@ -471,5 +615,52 @@ const deleteEdgeStyle = async (id) => {
 :deep(.el-tabs__content) {
   height: calc(100vh - 110px);
   overflow-y: auto;
+}
+
+/* 多选组件的样式 */
+.style-multi-select {
+  width: 100%;
+}
+
+.selected-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #fafbfc;
+}
+
+.style-item {
+  display: flex;
+  align-items: center;
+}
+
+.style-item .el-tag {
+  transition: all 0.2s ease;
+}
+
+.style-item .el-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.empty-styles {
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+  border: 1px dashed #dcdfe6;
+  border-radius: 4px;
+  margin-top: 10px;
+  background-color: #fafbfc;
+}
+
+/* 自定义边距 */
+.mb-2 {
+  margin-bottom: 8px !important;
 }
 </style>

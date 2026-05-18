@@ -23,8 +23,8 @@ class Theme(Base):
     __tablename__ = 'themes'
     id = Column(String(50), primary_key=True)
     name = Column(String(50), nullable=False)
-    default_node_style_id = Column(String(50), ForeignKey('node_styles.id', ondelete='SET NULL'))
-    default_edge_style_id = Column(String(50), ForeignKey('edge_styles.id', ondelete='SET NULL'))
+    default_node_style_id = Column(String(50))  # 移除外键约束，存储分隔符字符串
+    default_edge_style_id = Column(String(50))  # 移除外键约束，存储分隔符字符串
     sort_num = Column(Integer, default=0)
 
 
