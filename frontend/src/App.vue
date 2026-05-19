@@ -207,7 +207,7 @@ import ResourceManager from './components/ResourceManager.vue'
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
   physicsEnabled, getNodeStyle, fetchDataFromServer, addNode, addEdge,
-  updateNodeToServer, updateEdgeToServer, onThemeFilterChange, deleteNodesAndRelatedEdges, refreshKey
+  updateNodeToServer, updateEdgeToServer, onThemeFilterChange, deleteNodesAndRelatedEdges, deleteEdge, refreshKey
 } = useGraphCore()
 
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
@@ -301,9 +301,21 @@ const saveProperties = async () => {
 }
 
 const deleteSelected = async () => {
-  if (selectedNodeIds.value.length > 0) {
+  // 如果是节点，使用现有的节点删除功能
+  if (editingItem.type === 'node' && selectedNodeIds.value.length > 0) {
     await deleteNodesAndRelatedEdges(selectedNodeIds.value);
-    selectedNodeIds.value = []; isPanelOpen.value = false
+    selectedNodeIds.value = []; isPanelOpen.value = false;
+    ElMessage.success('节点已删除');
+  } 
+  // 如果是边，使用边删除功能
+  else if (editingItem.type === 'edge' && editingItem.id) {
+    await deleteEdge(editingItem.id);
+    isPanelOpen.value = false;
+    ElMessage.success('连线已删除');
+  }
+  // 没有选中任何东西时显示提示
+  else {
+    ElMessage.warning('请先选中要删除的元素');
   }
 }
 
