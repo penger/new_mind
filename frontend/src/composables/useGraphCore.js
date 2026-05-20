@@ -18,6 +18,8 @@ export function useGraphCore() {
   const linkIdCounter = ref(1)
   const resourceIdCounter = ref(1)
   const refreshKey = ref(0)
+  // 用于防止主题切换时的竞态条件
+  let currentFetchThemeId = ''
 
   const getNodeStyle = (id) => nodeStyles.value.find(s => s.id === id) || nodeStyles.value[0]
   const getEdgeStyle = (id) => edgeStyles.value.find(s => s.id === id) || edgeStyles.value[0]
@@ -40,27 +42,43 @@ export function useGraphCore() {
 
   const fetchDataFromServer = async (themeId = undefined) => {
     try {
+      const targetThemeId = themeId !== undefined && themeId !== null && themeId !== '' ? themeId : ''
+      currentFetchThemeId = targetThemeId
+      
+      // 主题切换时，先清空节点和连线数据，避免闪烁
+      if (targetThemeId !== '') {
+        nodes.value = []
+        links.value = []
+      }
+      
       const url = themeId !== undefined && themeId !== null && themeId !== ''
         ? `${API_BASE_URL}/data?theme_id=${encodeURIComponent(themeId)}`
         : `${API_BASE_URL}/data`
       const response = await fetch(url)
       if (!response.ok) throw new Error('网络错误')
       const data = await response.json()
-      nodeStyles.value = data.nodeStyles || []
-      edgeStyles.value = data.edgeStyles || []
-      themes.value = data.themes || []
-      nodes.value = data.nodes || []
-      links.value = data.links || []
+      
+      // 防止竞态条件：检查是否仍然是当前请求的主题
+      if (currentFetchThemeId === targetThemeId) {
+        nodeStyles.value = data.nodeStyles || []
+        edgeStyles.value = data.edgeStyles || []
+        themes.value = data.themes || []
+        nodes.value = data.nodes || []
+        links.value = data.links || []
+        syncCounters()
+        themes.value.sort((a, b) => (b.sortNum || 0) - (a.sortNum || 0))
+        if (themeId !== undefined && themeId !== null && themeId !== '') {
+          visibleThemes.value = new Set([themeId])
+        } else {
+          visibleThemes.value = new Set([themes.value[0]?.id])
+          activeThemeFilter.value = themes.value[0]?.id || null
+        }
+      } else {
+        console.log(`🔄 忽略过期的主题数据：请求了 ${targetThemeId}，但当前需要的是 ${currentFetchThemeId}`)
+      }
+      
       if (themes.value.length === 0) {
         await initDefaultData()
-      }
-      syncCounters()
-      themes.value.sort((a, b) => (b.sortNum || 0) - (a.sortNum || 0))
-      if (themeId !== undefined && themeId !== null && themeId !== '') {
-        visibleThemes.value = new Set([themeId])
-      } else {
-        visibleThemes.value = new Set([themes.value[0]?.id])
-        activeThemeFilter.value = themes.value[0]?.id || null
       }
     } catch (error) {
       await initDefaultData()
@@ -256,7 +274,6 @@ const addEdge = async (source, target) => {
 
   const onThemeFilterChange = async (themeId) => {
     activeThemeFilter.value = themeId
-    visibleThemes.value = new Set([themeId])
     refreshKey.value++
     await fetchDataFromServer(themeId)
   }

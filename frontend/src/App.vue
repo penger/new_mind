@@ -344,7 +344,25 @@ const onEdgePresetChange = (id) => {
     editingItem.style.style = s.line_style || 'solid'; 
   } 
 }
-const onThemeFilterChangeHandler = () => onThemeFilterChange(activeThemeFilter.value)
+const onThemeFilterChangeHandler = () => {
+  // 切换主题时自动切换到浏览模式，确保显示一致性
+  if (isEditing.value) {
+    console.log('🔀 切换主题，自动切换到浏览模式')
+    isEditing.value = false
+    selectedNodeIds.value = []
+    selectedLinkIds.value = []
+    isPanelOpen.value = false
+    
+    // 完整重置编辑项到初始状态
+    editingItem.id = ''
+    editingItem.type = 'node'
+    editingItem.label = ''
+    editingItem.content = ''
+    editingItem.size = 18
+    editingItem.style = {}
+  }
+  onThemeFilterChange(activeThemeFilter.value)
+}
 const openResourceManager = () => { isResourceManagerOpen.value = true }
 const handleResourceRefresh = async () => { await fetchDataFromServer() }
 
