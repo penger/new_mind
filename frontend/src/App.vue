@@ -32,18 +32,19 @@
                 <el-option v-for="theme in themes" :key="theme.id" :label="theme.name" :value="theme.id" />
               </el-select>
             </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="physicsEnabled" :disabled="isEditing">开启物理模拟</el-checkbox>
-            </el-form-item>
           </el-form>
         </el-card>
 
         <el-card class="sidebar-card" style="margin-top: 12px;">
           <template #header><span class="card-title">选中详情</span></template>
-          <div v-if="!selectedNodes || selectedNodes.length === 0" class="empty-text">点击节点进行编辑</div>
+          <div v-if="!selectedNodes || selectedNodes.length === 0" class="empty-text">{{ isEditing ? '点击节点进行编辑' : '点击节点查看详情' }}</div>
           <div v-else v-for="node in selectedNodes" :key="node.id" class="selection-item">
             <el-tag size="small" :style="{ backgroundColor: node.style?.color || getNodeStyle(node.nodeStyleId)?.color }">●</el-tag>
-            {{ node.label }}
+            <div class="node-info">
+              <div class="node-label">{{ node.label }}</div>
+              <div v-if="node.content && node.content.trim()" class="node-content">{{ node.content }}</div>
+              <div v-else-if="!isEditing" class="empty-content">暂无内容描述</div>
+            </div>
           </div>
         </el-card>
       </el-aside>
@@ -384,5 +385,50 @@ html, body, #app { margin: 0; padding: 0; height: 100vh; width: 100%; overflow: 
 /* 样式选择器中标签样式 */
 .el-select .el-tag {
   margin-left: auto;
+}
+
+/* 选中详情样式优化 */
+.selection-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.selection-item:last-child {
+  border-bottom: none;
+}
+
+.node-info {
+  margin-left: 8px;
+  flex: 1;
+  min-width: 0; /* 允许文本换行 */
+}
+
+.node-label {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.node-content {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.4;
+  background-color: #f8f9fa;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border-left: 3px solid #409eff;
+  margin-top: 4px;
+  word-break: break-word;
+  white-space: pre-line; /* 保留换行符 */
+}
+
+.empty-content {
+  font-size: 11px;
+  color: #909399;
+  font-style: italic;
+  margin-top: 2px;
 }
 </style>

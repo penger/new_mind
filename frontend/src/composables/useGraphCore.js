@@ -139,11 +139,56 @@ export function useGraphCore() {
         })
       })
       if (!response.ok) throw new Error('保存连线失败')
-      return true
+      const result = await response.json()
+      return result  // 返回完整的响应结果
     } catch (error) {
       console.error('保存连线失败:', error)
-      return false
+      return { status: 'error', message: error.message }
     }
+  }
+
+
+const addEdge = async (source, target) => {
+    const sid = source.id || source
+    const tid = target.id || target
+    if (sid === tid) return null  // 防止自连接
+
+    const exists = links.value.find(l => {
+      const lsid = typeof l.source === 'object' ? l.source.id : l.source
+      const ltid = typeof l.target === 'object' ? l.target.id : l.target
+      return (lsid === sid && ltid === tid) || (lsid === tid && ltid === sid)
+    })
+    if (exists) return null
+
+    const theme = themes.value.find(t => t.id === activeThemeFilter.value) || themes.value[0]
+    const edgeStyle = theme.defaultEdgeStyleId
+      ? edgeStyles.value.find(s => s.id === theme.defaultEdgeStyleId) : edgeStyles.value[0]
+
+    const newEdge = {
+      id: `E${linkIdCounter.value++}`, source: sid, target: tid, label: '', width: 2,
+      themeId: theme.id, edgeStyleId: edgeStyle?.id || edgeStyles.value[0]?.id,
+      content: '', selected: false,
+      style: edgeStyle ? { color: edgeStyle.color, style: edgeStyle.style, width: 2 } : null
+    }
+    links.value.push(newEdge)
+    const result = await addEdgeToServer(newEdge)
+    if (result.id && result.id !== newEdge.id) {
+      // 更新本地连线的ID
+      const localEdge = links.value.find(l => l.id === newEdge.id)
+      if (localEdge) {
+        localEdge.id = result.id
+      }
+      // 更新linkIdCounter，确保下个ID大于这个ID
+      try {
+        const newIdNum = parseInt(result.id.replace('E', ''))
+        if (!isNaN(newIdNum) && newIdNum >= linkIdCounter.value) {
+          linkIdCounter.value = newIdNum + 1
+        }
+      } catch (e) {
+        // 如果无法解析数字，忽略
+      }
+    }
+    return newEdge
   }
 
   const updateEdgeToServer = async (edge) => {
@@ -185,33 +230,6 @@ export function useGraphCore() {
     nodes.value.push(newNode)
     await addNodeToServer(newNode)
     return newNode
-  }
-
-  const addEdge = async (source, target) => {
-    if (source === target) return null
-    const sid = source.id || source
-    const tid = target.id || target
-
-    const exists = links.value.find(l => {
-      const lsid = typeof l.source === 'object' ? l.source.id : l.source
-      const ltid = typeof l.target === 'object' ? l.target.id : l.target
-      return (lsid === sid && ltid === tid) || (lsid === tid && ltid === sid)
-    })
-    if (exists) return null
-
-    const theme = themes.value.find(t => t.id === activeThemeFilter.value) || themes.value[0]
-    const edgeStyle = theme.defaultEdgeStyleId
-      ? edgeStyles.value.find(s => s.id === theme.defaultEdgeStyleId) : edgeStyles.value[0]
-
-    const newEdge = {
-      id: `E${linkIdCounter.value++}`, source: sid, target: tid, label: '', width: 2,
-      themeId: theme.id, edgeStyleId: edgeStyle?.id || edgeStyles.value[0]?.id,
-      content: '', selected: false,
-      style: edgeStyle ? { color: edgeStyle.color, style: edgeStyle.style, width: 2 } : null
-    }
-    links.value.push(newEdge)
-    await addEdgeToServer(newEdge)
-    return newEdge
   }
 
   const deleteNode = async (nodeId) => {

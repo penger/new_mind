@@ -42,7 +42,14 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="默认配置" width="320">
+            <el-table-column prop="sortNum" label="排序值" width="80" align="center" sortable>
+              <template #default="{ row }">
+                <el-tag :type="row.sortNum > 0 ? 'success' : 'info'" size="small">
+                  {{ row.sortNum || 0 }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="默认配置" width="300">
               <template #default="{ row }">
                 <div class="config-tags">
                   <el-tooltip 
@@ -170,6 +177,17 @@
         </el-form-item>
         <el-form-item label="主题显示名称" required>
           <el-input v-model="themeForm.name" placeholder="请输入主题名称" />
+        </el-form-item>
+        <el-form-item label="排序值">
+          <el-tooltip content="数值越高，排序越靠前。首页默认显示排序最高的主题。" placement="top">
+            <el-input-number 
+              v-model="themeForm.sortNum" 
+              :min="0" 
+              :max="999" 
+              :step="1" 
+              placeholder="输入排序值"
+            />
+          </el-tooltip>
         </el-form-item>
         <el-form-item label="默认节点样式">
           <div class="style-multi-select">
@@ -376,7 +394,8 @@ const themeForm = reactive({
   defaultNodeStyleId: '', 
   defaultEdgeStyleId: '',
   defaultNodeStyleIds: [],  // 解析后的数组格式
-  defaultEdgeStyleIds: []   // 解析后的数组格式
+  defaultEdgeStyleIds: [],  // 解析后的数组格式
+  sortNum: 0                // 添加排序字段
 })
 const nodeStyleForm = reactive({ id: '', name: '', color: '#3498db', shape: 'circle', opacity: 1 })
 const edgeStyleForm = reactive({ id: '', name: '', color: '#95a5a6', line_style: 'solid' })
@@ -455,7 +474,8 @@ const openThemeDialog = (theme = null) => {
       defaultNodeStyleId: theme.defaultNodeStyleId || '',
       defaultEdgeStyleId: theme.defaultEdgeStyleId || '',
       defaultNodeStyleIds: parseStyleIds(theme.defaultNodeStyleId),
-      defaultEdgeStyleIds: parseStyleIds(theme.defaultEdgeStyleId)
+      defaultEdgeStyleIds: parseStyleIds(theme.defaultEdgeStyleId),
+      sortNum: theme.sortNum || 0  // 添加排序字段
     }
     Object.assign(themeForm, themeData)
   } else {
@@ -465,7 +485,8 @@ const openThemeDialog = (theme = null) => {
       defaultNodeStyleId: '', 
       defaultEdgeStyleId: '',
       defaultNodeStyleIds: [],
-      defaultEdgeStyleIds: []
+      defaultEdgeStyleIds: [],
+      sortNum: 0  // 添加排序字段
     })
   }
   themeDialogVisible.value = true
@@ -481,7 +502,7 @@ const saveTheme = () => {
     name: themeForm.name,
     defaultNodeStyleIds: themeForm.defaultNodeStyleIds,
     defaultEdgeStyleIds: themeForm.defaultEdgeStyleIds,
-    sortNum: editingTheme.value?.sortNum || 0
+    sortNum: themeForm.sortNum || 0  // 使用表单中的值而不是旧值
   }
   
   request(url, method, requestData, () => themeDialogVisible.value = false)

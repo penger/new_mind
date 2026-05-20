@@ -44,15 +44,35 @@ const getSymbolPath = (shapeStr, size) => {
 const syncD3Data = () => {
   const oldMap = new Map(d3Nodes.map(n => [n.id, n]))
   const w = svgRef.value?.clientWidth || 800, h = svgRef.value?.clientHeight || 600
+  const padding = 100; // 边界内边距
+  
+  // 边界检查辅助函数
+  const enforceBoundary = (x, y) => {
+    const minX = padding;
+    const maxX = w - padding;
+    const minY = padding;
+    const maxY = h - padding;
+    
+    return {
+      x: Math.max(minX, Math.min(maxX, x)),
+      y: Math.max(minY, Math.min(maxY, y))
+    };
+  };
 
   d3Nodes = (props.nodes || []).map(n => {
     const old = oldMap.get(n.id)
     if (old) return { 
-      ...n, x: old.x, y: old.y, vx: old.vx, vy: old.vy, 
+      ...n, x: old.x, y: old.y, vx: old.vx ?? 0, vy: old.vy ?? 0, 
       fx: (props.mode === 'edit' && !isStabilizing.value) ? old.x : (n.fx ?? old.fx), 
       fy: (props.mode === 'edit' && !isStabilizing.value) ? old.y : (n.fy ?? old.fy) 
     }
-    return { ...n, x: n.x ?? (w/2 + (Math.random()-0.5)*100), y: n.y ?? (h/2 + (Math.random()-0.5)*100) }
+    
+    // 新节点：在更大范围内随机分布，但确保不在边界外
+    const randomX = w/2 + (Math.random()-0.5) * (w - padding*2) * 0.7;
+    const randomY = h/2 + (Math.random()-0.5) * (h - padding*2) * 0.7;
+    const boundedPos = enforceBoundary(randomX, randomY);
+    
+    return { ...n, x: boundedPos.x, y: boundedPos.y, vx: 0, vy: 0 }
   })
   
   const nMap = new Map(d3Nodes.map(n => [n.id, n]))
@@ -158,14 +178,14 @@ onMounted(() => {
   nextTick(() => {
     const w = svgRef.value.clientWidth, h = svgRef.value.clientHeight
     
-    // 专业级物理参数优化
+    // 专业级物理参数优化 - 增强分散和稳定性
     simulation = d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.id).distance(120).strength(0.6))
-      .force('charge', d3.forceManyBody().strength(-400).distanceMax(500))
-      .force('center', d3.forceCenter(w/2, h/2))
-      .force('collision', d3.forceCollide().radius(40))
-      .velocityDecay(0.6) // 核心：增加摩擦力（阻尼感），让节点更快停止
-      .alphaDecay(0.05)   // 核心：加快冷却速度
+      .force('link', d3.forceLink().id(d => d.id).distance(70).strength(0.8))  // 增加距离，增强连接力
+      .force('charge', d3.forceManyBody().strength(-400).distanceMax(600))      // 增强排斥力，扩大最大作用距离
+      .force('center', d3.forceCenter(w/2, h/2).strength(0.1))                  // 减弱中心引力
+      .force('collision', d3.forceCollide().radius(60))                         // 增加碰撞半径
+      .velocityDecay(0.2) // 增加摩擦力，让节点更快停稳
+      .alphaDecay(0.02)   // 减慢冷却速度，给予更多时间找到平衡位置
       .on('tick', ticked)
 
     zoom = d3.zoom().scaleExtent([0.1, 5]).on('zoom', (e) => { 
@@ -196,13 +216,24 @@ onMounted(() => {
     syncD3Data(); // 先同步数据
     
     // --- 核心优化：静默预热 (Silent Pre-tick) ---
-    // 在页面显示之前，先运行 300 次物理计算，让节点找好位置
-    for (let i = 0; i < 300; ++i) simulation.tick();
+    // 动态计算预热次数：基础600次 + 每2个节点增加1次
+    const preTickCount = 600 + Math.floor((props.nodes?.length || 0) / 2);
+    console.log(`🔧 静默预热开始：${props.nodes?.length || 0}个节点，预计算${preTickCount}次`);
+    
+    for (let i = 0; i < preTickCount; ++i) simulation.tick();
+    
+    // 关键优化：预热后重置所有节点的速度，防止晃动
+    d3Nodes.forEach(n => { n.vx = 0; n.vy = 0; });
     
     renderGraph(); // 此时再进行首屏渲染，节点已经是稳定的了
 
+    // 动态计算等待时间：根据预热次数调整
+    const stabilizationDelay = Math.max(100, Math.min(500, 50 + preTickCount / 10));
+    console.log(`⏱️ 等待${stabilizationDelay}ms后完成稳定`);
+    
     setTimeout(() => {
       isStabilizing.value = false;
+      console.log(`✅ 布局稳定完成，准备显示`);
       if (props.mode === 'edit') {
         simulation.stop();
         d3Nodes.forEach(d => { d.fx = d.x; d.fy = d.y });
@@ -210,7 +241,7 @@ onMounted(() => {
       // 平滑居中
       d3.select(svgRef.value).transition().duration(800).call(zoom.transform, d3.zoomIdentity)
       ticked();
-    }, 100); // 预热后只需极短时间即可完全稳定
+    }, stabilizationDelay);
   })
 })
 

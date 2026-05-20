@@ -13,6 +13,13 @@ def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
         themes = db.query(Theme).all()
         node_styles = db.query(NodeStyle).all()
         edge_styles = db.query(EdgeStyle).all()
+        
+        # 如果没有指定theme_id，则使用默认主题（sort_num最高的主题）
+        if not theme_id and themes:
+            # 找到sort_num最高的主题作为默认主题
+            default_theme = max(themes, key=lambda t: t.sort_num if t.sort_num is not None else -1)
+            theme_id = default_theme.id
+        
         if theme_id:
             nodes = db.query(Node).filter(Node.theme_id == theme_id).all()
             edges = db.query(Edge).filter(
@@ -21,8 +28,9 @@ def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
                 Edge.target_id.in_([n.id for n in nodes])
             ).all()
         else:
-            nodes = db.query(Node).all()
-            edges = db.query(Edge).all()
+            # 如果没有主题，返回空数据
+            nodes = []
+            edges = []
         
         # 格式化theme数据，包含分隔符字符串和解析后的数组
         formatted_themes = []
@@ -166,20 +174,44 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
 # 单个边操作
 @router.post("/edges")
 def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
-    """创建单个边"""
+    """创建单个边，自动处理ID冲突"""
     try:
-        existing = db.query(Edge).filter(Edge.id == edge.id).first()
-        if existing:
-            max_id = db.query(Edge).order_by(Edge.id.desc()).first()
-            if max_id and max_id.id:
+        # 生成唯一的ID：尝试使用原始ID，如果存在则生成新的
+        original_id = edge.id
+        new_id = original_id
+        
+        # 检查ID是否已存在，如果存在则生成新ID
+        attempts = 0
+        while attempts < 100:  # 最多尝试100次
+            existing = db.query(Edge).filter(Edge.id == new_id).first()
+            if not existing:
+                break  # ID可用，跳出循环
+                
+            # ID已存在，生成新ID
+            attempts += 1
+            if original_id.startswith('E') and original_id[1:].isdigit():
+                # 如果原始ID格式是E+数字，尝试递增数字
                 try:
-                    num = int(max_id.id.replace('E', ''))
-                    new_id = f"E{num + 1}"
+                    current_num = int(new_id.replace('E', ''))
+                    new_id = f"E{current_num + attempts}"
                 except:
-                    new_id = f"E{max_id.id}"
+                    new_id = f"E_{int(time.time() * 1000)}"  # 使用时间戳作为后备方案
             else:
-                new_id = edge.id
-            edge = EdgeModel(id=new_id, source=edge.source, target=edge.target, label=edge.label, width=edge.width, themeId=edge.themeId, edgeStyleId=edge.edgeStyleId, content=edge.content, style=edge.style)
+                # 否则使用时间戳
+                import time
+                new_id = f"E_{int(time.time() * 1000)}_{attempts}"
+        
+        # 如果尝试100次后仍然没有找到可用ID，抛出错误
+        if attempts >= 100:
+            raise HTTPException(status_code=500, detail="无法生成可用的连线ID")
+        
+        # 如果生成了新ID，创建新的EdgeModel
+        if new_id != original_id:
+            edge = EdgeModel(
+                id=new_id, source=edge.source, target=edge.target, 
+                label=edge.label, width=edge.width, themeId=edge.themeId, 
+                edgeStyleId=edge.edgeStyleId, content=edge.content, style=edge.style
+            )
         
         db_edge = Edge(
             id=edge.id,
@@ -195,6 +227,8 @@ def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
         db.add(db_edge)
         db.commit()
         return {"status": "success", "message": "Edge created", "id": edge.id}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -233,11 +267,15 @@ def delete_edge(edge_id: str, db: Session = Depends(get_db)):
 # 单个 Theme 操作
 @router.post("/themes")
 def create_theme(theme: ThemeModel, db: Session = Depends(get_db)):
-    """创建单个主题，自动设置 sort_num 为当前最大值 + 1"""
+    """创建单个主题，使用前端传入的 sortNum 或自动设置最大值 + 1"""
     try:
-        # 查询当前最大的 sort_num
-        max_sort = db.query(Theme.sort_num).order_by(Theme.sort_num.desc()).first()
-        new_sort_num = (max_sort[0] + 1) if max_sort and max_sort[0] is not None else 1
+        # 优先使用前端传入的 sortNum，否则自动计算
+        if theme.sortNum is not None and theme.sortNum > 0:
+            new_sort_num = theme.sortNum
+        else:
+            # 查询当前最大的 sort_num
+            max_sort = db.query(Theme.sort_num).order_by(Theme.sort_num.desc()).first()
+            new_sort_num = (max_sort[0] + 1) if max_sort and max_sort[0] is not None else 1
         
         # 处理样式ID字段：优先使用数组格式，否则使用原始的字符串
         if theme.defaultNodeStyleIds:
