@@ -39,7 +39,7 @@
           <template #header><span class="card-title">选中详情</span></template>
           <div v-if="!selectedNodes || selectedNodes.length === 0" class="empty-text">{{ isEditing ? '点击节点进行编辑' : '点击节点查看详情' }}</div>
           <div v-else v-for="node in selectedNodes" :key="node.id" class="selection-item">
-            <el-tag size="small" :style="{ backgroundColor: node.style?.color || getNodeStyle(node.nodeStyleId)?.color }">●</el-tag>
+            <!-- <el-tag size="small" :style="{ backgroundColor: node.style?.color || getNodeStyle(node.nodeStyleId)?.color }">●</el-tag> -->
             <div class="node-info">
               <div class="node-label">{{ node.label }}</div>
               <div v-if="node.content && node.content.trim()" class="node-content">{{ node.content }}</div>
