@@ -13,6 +13,19 @@
         <span class="status-text">{{ statusText }}</span>
       </div>
       <div class="header-right">
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索节点..."
+          size="default"
+          clearable
+          style="width: 200px; margin-right: 10px;"
+          @input="handleSearch"
+          @clear="handleSearchClear"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
         <el-radio-group v-model="viewType" size="default">
           <el-radio-button value="2d">平面图</el-radio-button>
           <el-radio-button value="3d">星云图</el-radio-button>
@@ -39,10 +52,11 @@
           <template #header><span class="card-title">选中详情</span></template>
           <div v-if="!selectedNodes || selectedNodes.length === 0" class="empty-text">{{ isEditing ? '点击节点进行编辑' : '点击节点查看详情' }}</div>
           <div v-else v-for="node in selectedNodes" :key="node.id" class="selection-item">
-            <!-- <el-tag size="small" :style="{ backgroundColor: node.style?.color || getNodeStyle(node.nodeStyleId)?.color }">●</el-tag> -->
             <div class="node-info">
               <div class="node-label">{{ node.label }}</div>
-              <div v-if="node.content && node.content.trim()" class="node-content">{{ node.content }}</div>
+              <div v-if="node.content && node.content.trim()" class="node-content" @click="copyToClipboard(node.content)" style="cursor: pointer;" title="点击复制内容">
+                {{ node.content }}
+              </div>
               <div v-else-if="!isEditing" class="empty-content">暂无内容描述</div>
             </div>
           </div>
@@ -60,6 +74,7 @@
           :visibleThemes="visibleThemes"
           :physicsEnabled="physicsEnabled"
           :mode="isEditing ? 'edit' : 'view'"
+          :searchMatches="searchMatches"
           @node-click="onNodeClick"
           @node-hover="onNodeHover"
           @node-leave="onNodeLeave"
@@ -193,6 +208,22 @@
         :edgeStyles="edgeStyles"
         @refresh="handleResourceRefresh"
       />
+
+      <!-- 内容查看模态框 -->
+      <el-dialog
+        v-model="isContentModalOpen"
+        title="查看内容"
+        width="80%"
+        :close-on-click-modal="true"
+        destroy-on-close
+      >
+        <div style="max-height: 70vh; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 13px; line-height: 1.6;">
+          {{ modalContent }}
+        </div>
+        <template #footer>
+          <el-button type="primary" @click="isContentModalOpen = false">关闭</el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -200,6 +231,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import { useGraphCore } from './composables/useGraphCore'
 import Graph2D from './components/Graph2D.vue'
 import Graph3DView from './components/Graph3DView.vue'
@@ -213,6 +245,10 @@ const {
 
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
 const isResourceManagerOpen = ref(false)
+const isContentModalOpen = ref(false)
+const modalContent = ref('')
+const searchQuery = ref('')
+const searchMatches = ref(new Map()) // 存储匹配结果: nodeId -> matchType (0=不匹配, 1=仅label, 2=仅content, 3=两者都匹配)
 const infoCardPos = reactive({ x: 0, y: 0 }), hoverItem = reactive({ label: '', content: '' })
 const editingItem = reactive({ id: '', label: '', content: '', style: {}, type: 'node', size: 18 })
 const selectedNodeIds = ref([]), graphArea = ref(null)
@@ -285,6 +321,183 @@ const onNodeHover = ({ event, node }) => {
 
 const onNodeLeave = () => { isInfoCardOpen.value = false }
 const handleEditChange = (v) => { if (v && viewType.value === '3d') viewType.value = '2d' }
+
+// 格式化显示内容（处理JSON转义问题）
+const formatDisplayContent = (content) => {
+  if (!content) return ''
+  
+  // 尝试检测并解析双重编码的JSON
+  try {
+    // 检查是否包含转义的引号（双重编码的标志）
+    if (content.includes('\\"') || content.includes('\\r') || content.includes('\\n')) {
+      // 尝试解析为JSON
+      const parsed = JSON.parse(content)
+      // 重新格式化为易读的格式，然后清理转义字符
+      let formatted = JSON.stringify(parsed, null, 2)
+      // 替换 \r\n 为换行符，\n 也替换为换行符，其他 \ 为空格
+      formatted = formatted
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '  ')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        // 清理连续多个空格（但保留换行）
+        .split('\n')
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .join('\n')
+        .trim()
+      return formatted
+    }
+  } catch (e) {
+    // 解析失败，可能不是JSON，返回原内容
+  }
+  
+  // 如果内容看起来像JSON字符串（以引号开头和结尾），尝试解析
+  const trimmed = content.trim()
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      let formatted = JSON.stringify(parsed, null, 2)
+      // 替换 \r\n 为换行符，\n 也替换为换行符，其他 \ 为空格
+      formatted = formatted
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '  ')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        // 清理连续多个空格（但保留换行）
+        .split('\n')
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .join('\n')
+        .trim()
+      return formatted
+    } catch (e) {
+      // 解析失败，返回原内容
+    }
+  }
+  
+  // 对非JSON内容也进行清理
+  return content
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '  ')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    // 清理连续多个空格（但保留换行）
+    .split('\n')
+    .map(line => line.replace(/\s+/g, ' ').trim())
+    .join('\n')
+    .trim()
+}
+
+// 复制内容到剪贴板并显示模态框
+const copyToClipboard = async (content) => {
+  if (!content) return
+  
+  // 显示模态框（使用格式化后的内容）
+  modalContent.value = formatDisplayContent(content)
+  isContentModalOpen.value = true
+  
+  // 复制原始内容到剪贴板
+  try {
+    await navigator.clipboard.writeText(content)
+    ElMessage.success('内容已复制到剪贴板')
+  } catch (err) {
+    // 降级方案：使用传统的复制方法
+    const textArea = document.createElement('textarea')
+    textArea.value = content
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    document.body.appendChild(textArea)
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('内容已复制到剪贴板')
+    } catch (err2) {
+      ElMessage.error('复制失败，请手动复制')
+    }
+    document.body.removeChild(textArea)
+  }
+}
+
+// 复制模态框内容到剪贴板（复制格式化后的内容）
+const copyModalContent = async () => {
+  if (!modalContent.value) return
+  try {
+    await navigator.clipboard.writeText(modalContent.value)
+    ElMessage.success('内容已复制到剪贴板')
+  } catch (err) {
+    const textArea = document.createElement('textarea')
+    textArea.value = modalContent.value
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-9999px'
+    document.body.appendChild(textArea)
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('内容已复制到剪贴板')
+    } catch (err2) {
+      ElMessage.error('复制失败')
+    }
+    document.body.removeChild(textArea)
+  }
+}
+
+// 搜索处理函数
+const handleSearch = () => {
+  performSearch()
+}
+
+// 清除搜索
+const handleSearchClear = () => {
+  searchQuery.value = ''
+  searchMatches.value = new Map()
+  ElMessage.info('已清除搜索')
+}
+
+// 执行搜索
+const performSearch = () => {
+  const query = searchQuery.value.trim().toLowerCase()
+  
+  if (!query) {
+    searchMatches.value = new Map()
+    return
+  }
+  
+  const matches = new Map()
+  const currentNodes = nodes.value || []
+  
+  currentNodes.forEach(node => {
+    const label = (node.label || '').toLowerCase()
+    const content = (node.content || '').toLowerCase()
+    
+    const labelMatch = label.includes(query)
+    const contentMatch = content.includes(query)
+    
+    let matchType = 0
+    if (labelMatch && contentMatch) {
+      matchType = 3 // 两者都匹配
+    } else if (labelMatch) {
+      matchType = 1 // 仅label匹配
+    } else if (contentMatch) {
+      matchType = 2 // 仅content匹配
+    }
+    
+    if (matchType > 0) {
+      matches.set(node.id, matchType)
+    }
+  })
+  
+  searchMatches.value = matches
+  
+  if (matches.size > 0) {
+    ElMessage.success(`找到 ${matches.size} 个匹配结果`)
+  } else {
+    ElMessage.warning('未找到匹配结果')
+  }
+}
 const onEditorNodeAdd = async ({ x, y }) => { const n = await addNode(x, y); if (n) onNodeClick(n) }
 const onEditorEdgeAdd = async ({ source, target }) => { await addEdge(source, target); ElMessage.success('成功建立逻辑关系') }
 const onEdgeClick = (edge) => { selectedNodeIds.value = []; Object.assign(editingItem, { ...edge, type: 'edge', style: edge.style ? { ...edge.style } : {} }); isPanelOpen.value = true }

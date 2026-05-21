@@ -16,7 +16,8 @@ import * as d3 from 'd3'
 
 const props = defineProps({
   nodes: Array, links: Array, nodeStyles: Array, edgeStyles: Array,
-  visibleThemes: Set, physicsEnabled: Boolean, mode: String
+  visibleThemes: Set, physicsEnabled: Boolean, mode: String,
+  searchMatches: { type: Map, default: () => new Map() }
 })
 
 const emit = defineEmits(['node-click', 'node-hover', 'node-leave', 'node-add', 'edge-add', 'edge-click'])
@@ -39,6 +40,38 @@ const getSymbolPath = (shapeStr, size) => {
     default:        symbolType = d3.symbolCircle; break;
   }
   return d3.symbol().type(symbolType).size(Math.pow(size || 18, 2) * 2)()
+}
+
+// 获取搜索高亮样式
+const getSearchHighlightStyle = (nodeId) => {
+  const matchType = props.searchMatches?.get(nodeId)
+  
+  if (!matchType || matchType === 0) {
+    return null // 无匹配
+  }
+  
+  const styles = {
+    3: { // 两者都匹配 - 最显眼
+      stroke: '#e74c3c',
+      strokeWidth: 4,
+      strokeOpacity: 1,
+      filter: 'drop-shadow(0 0 8px rgba(231, 76, 60, 0.8))'
+    },
+    1: { // 仅label匹配 - 中等显眼
+      stroke: '#f39c12',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      filter: 'drop-shadow(0 0 5px rgba(243, 156, 18, 0.6))'
+    },
+    2: { // 仅content匹配 - 较弱显眼
+      stroke: '#3498db',
+      strokeWidth: 2,
+      strokeOpacity: 0.8,
+      filter: 'drop-shadow(0 0 3px rgba(52, 152, 219, 0.5))'
+    }
+  }
+  
+  return styles[matchType] || null
 }
 
 const syncD3Data = () => {
@@ -127,6 +160,35 @@ const renderGraph = () => {
     .attr('fill', d => d.style?.color || getNodeStyle(d.nodeStyleId).color)
     .attr('fill-opacity', d => d.style?.opacity ?? 1)
     .attr('d', d => getSymbolPath(d.style?.shape || getNodeStyle(d.nodeStyleId).shape, d.size))
+    // 应用搜索高亮样式
+    .attr('stroke', function(d) {
+      const highlight = getSearchHighlightStyle(d.id)
+      if (highlight) {
+        return highlight.stroke
+      }
+      return '#fff' // 默认白色边框
+    })
+    .attr('stroke-width', function(d) {
+      const highlight = getSearchHighlightStyle(d.id)
+      if (highlight) {
+        return highlight.strokeWidth
+      }
+      return 2 // 默认边框宽度
+    })
+    .attr('stroke-opacity', function(d) {
+      const highlight = getSearchHighlightStyle(d.id)
+      if (highlight) {
+        return highlight.strokeOpacity
+      }
+      return 1
+    })
+    .style('filter', function(d) {
+      const highlight = getSearchHighlightStyle(d.id)
+      if (highlight) {
+        return highlight.filter
+      }
+      return 'none'
+    })
 
   nodeSel.select('text').text(d => d.label)
 
@@ -181,7 +243,7 @@ onMounted(() => {
     // 专业级物理参数优化 - 增强分散和稳定性
     simulation = d3.forceSimulation()
       .force('link', d3.forceLink().id(d => d.id).distance(70).strength(0.8))  // 增加距离，增强连接力
-      .force('charge', d3.forceManyBody().strength(-400).distanceMax(600))      // 增强排斥力，扩大最大作用距离
+      .force('charge', d3.forceManyBody().strength(-300).distanceMax(100))      // 增强排斥力，扩大最大作用距离
       .force('center', d3.forceCenter(w/2, h/2).strength(0.1))                  // 减弱中心引力
       .force('collision', d3.forceCollide().radius(60))                         // 增加碰撞半径
       .velocityDecay(0.2) // 增加摩擦力，让节点更快停稳
@@ -258,4 +320,38 @@ watch(() => props.mode, (m) => {
   ticked() 
 })
 watch(() => [props.nodes, props.links], renderGraph, { deep: true })
+
+// 监听搜索匹配变化，重新渲染节点高亮
+watch(() => props.searchMatches, () => {
+  if (props.searchMatches && props.searchMatches.size > 0) {
+    // 触发节点样式更新
+    nextTick(() => {
+      if (svgRef.value) {
+        const mainG = d3.select(mainGroup.value)
+        mainG.select('#nodes-group').selectAll('.node-wrapper')
+          .select('.node-shape')
+          .attr('stroke', function(d) {
+            const highlight = getSearchHighlightStyle(d.id)
+            if (highlight) return highlight.stroke
+            return '#fff'
+          })
+          .attr('stroke-width', function(d) {
+            const highlight = getSearchHighlightStyle(d.id)
+            if (highlight) return highlight.strokeWidth
+            return 2
+          })
+          .attr('stroke-opacity', function(d) {
+            const highlight = getSearchHighlightStyle(d.id)
+            if (highlight) return highlight.strokeOpacity
+            return 1
+          })
+          .style('filter', function(d) {
+            const highlight = getSearchHighlightStyle(d.id)
+            if (highlight) return highlight.filter
+            return 'none'
+          })
+      }
+    })
+  }
+}, { deep: true })
 </script>

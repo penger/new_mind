@@ -10,3 +10,7 @@ __pycache__/
 venv/
 *.egg-info/
 pic
+
+# 本地参考文件和脚本目录
+refrence/
+scripts/
