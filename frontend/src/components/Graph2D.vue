@@ -47,31 +47,83 @@ const getSearchHighlightStyle = (nodeId) => {
   const matchType = props.searchMatches?.get(nodeId)
   
   if (!matchType || matchType === 0) {
-    return null // 无匹配
+    return null
   }
   
   const styles = {
-    3: { // 两者都匹配 - 最显眼
-      stroke: '#e74c3c',
+    3: { // 两者都匹配 - 最刺眼
+      stroke: '#ff0000',
+      strokeWidth: 6,
+      filter: 'drop-shadow(0 0 12px rgba(255, 0, 0, 1))'
+    },
+    1: { // 仅label匹配 - 橙色
+      stroke: '#ff6600',
+      strokeWidth: 5,
+      filter: 'drop-shadow(0 0 10px rgba(255, 102, 0, 1))'
+    },
+    2: { // 仅content匹配 - 品红
+      stroke: '#ff00ff',
       strokeWidth: 4,
-      strokeOpacity: 1,
-      filter: 'drop-shadow(0 0 8px rgba(231, 76, 60, 0.8))'
-    },
-    1: { // 仅label匹配 - 中等显眼
-      stroke: '#f39c12',
-      strokeWidth: 3,
-      strokeOpacity: 1,
-      filter: 'drop-shadow(0 0 5px rgba(243, 156, 18, 0.6))'
-    },
-    2: { // 仅content匹配 - 较弱显眼
-      stroke: '#3498db',
-      strokeWidth: 2,
-      strokeOpacity: 0.8,
-      filter: 'drop-shadow(0 0 3px rgba(52, 152, 219, 0.5))'
+      filter: 'drop-shadow(0 0 8px rgba(255, 0, 255, 0.9))'
     }
   }
   
   return styles[matchType] || null
+}
+
+// 判断节点是否匹配搜索
+const isNodeMatched = (nodeId) => {
+  return props.searchMatches?.has(nodeId)
+}
+
+// 闪烁效果定时器
+let highlightPulseState = false
+let highlightPulseTimer = null
+
+const startHighlightPulse = () => {
+  if (highlightPulseTimer) return
+  
+  highlightPulseTimer = setInterval(() => {
+    if (!svgRef.value || !mainGroup.value) return
+    
+    const mainG = d3.select(mainGroup.value)
+    const matchType = highlightPulseState ? 1 : 2
+    
+    mainG.select('#nodes-group').selectAll('.node-wrapper')
+      .each(function(d) {
+        const mt = props.searchMatches?.get(d.id)
+        if (mt && mt > 0) {
+          const pulse = d3.select(this).select('.node-shape')
+          
+          const colors = {
+            3: { bright: '#ff0000', dark: '#ff6666' },
+            1: { bright: '#ff6600', dark: '#ffaa00' },
+            2: { bright: '#ff00ff', dark: '#ff66ff' }
+          }
+          
+          const widths = { 3: 8, 1: 6, 2: 5 }
+          const filters = {
+            3: 'drop-shadow(0 0 20px rgba(255, 0, 0, 1))',
+            1: 'drop-shadow(0 0 16px rgba(255, 102, 0, 1))',
+            2: 'drop-shadow(0 0 12px rgba(255, 0, 255, 1))'
+          }
+          
+          pulse
+            .attr('stroke', colors[mt]?.[highlightPulseState ? 'bright' : 'dark'] || '#ff0000')
+            .attr('stroke-width', widths[mt] || 6)
+            .style('filter', filters[mt] || 'drop-shadow(0 0 15px rgba(255, 0, 0, 1))')
+        }
+      })
+    
+    highlightPulseState = !highlightPulseState
+  }, 400) // 每400ms切换一次状态
+}
+
+const stopHighlightPulse = () => {
+  if (highlightPulseTimer) {
+    clearInterval(highlightPulseTimer)
+    highlightPulseTimer = null
+  }
 }
 
 const syncD3Data = () => {
@@ -163,30 +215,17 @@ const renderGraph = () => {
     // 应用搜索高亮样式
     .attr('stroke', function(d) {
       const highlight = getSearchHighlightStyle(d.id)
-      if (highlight) {
-        return highlight.stroke
-      }
-      return '#fff' // 默认白色边框
+      if (highlight) return highlight.stroke
+      return '#fff'
     })
     .attr('stroke-width', function(d) {
       const highlight = getSearchHighlightStyle(d.id)
-      if (highlight) {
-        return highlight.strokeWidth
-      }
-      return 2 // 默认边框宽度
-    })
-    .attr('stroke-opacity', function(d) {
-      const highlight = getSearchHighlightStyle(d.id)
-      if (highlight) {
-        return highlight.strokeOpacity
-      }
-      return 1
+      if (highlight) return highlight.strokeWidth
+      return 2
     })
     .style('filter', function(d) {
       const highlight = getSearchHighlightStyle(d.id)
-      if (highlight) {
-        return highlight.filter
-      }
+      if (highlight) return highlight.filter
       return 'none'
     })
 
@@ -242,8 +281,8 @@ onMounted(() => {
     
     // 专业级物理参数优化 - 增强分散和稳定性
     simulation = d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.id).distance(70).strength(0.8))  // 增加距离，增强连接力
-      .force('charge', d3.forceManyBody().strength(-300).distanceMax(100))      // 增强排斥力，扩大最大作用距离
+      .force('link', d3.forceLink().id(d => d.id).distance(90).strength(0.8))  // 增加距离，增强连接力
+      .force('charge', d3.forceManyBody().strength(-300).distanceMax(300))      // 增强排斥力，扩大最大作用距离
       .force('center', d3.forceCenter(w/2, h/2).strength(0.1))                  // 减弱中心引力
       .force('collision', d3.forceCollide().radius(60))                         // 增加碰撞半径
       .velocityDecay(0.2) // 增加摩擦力，让节点更快停稳
@@ -322,11 +361,13 @@ watch(() => props.mode, (m) => {
 watch(() => [props.nodes, props.links], renderGraph, { deep: true })
 
 // 监听搜索匹配变化，重新渲染节点高亮
-watch(() => props.searchMatches, () => {
-  if (props.searchMatches && props.searchMatches.size > 0) {
-    // 触发节点样式更新
+watch(() => props.searchMatches, (newMatches) => {
+  // 先停止之前的闪烁
+  stopHighlightPulse()
+  
+  if (svgRef.value) {
     nextTick(() => {
-      if (svgRef.value) {
+      if (svgRef.value && mainGroup.value) {
         const mainG = d3.select(mainGroup.value)
         mainG.select('#nodes-group').selectAll('.node-wrapper')
           .select('.node-shape')
@@ -340,18 +381,75 @@ watch(() => props.searchMatches, () => {
             if (highlight) return highlight.strokeWidth
             return 2
           })
-          .attr('stroke-opacity', function(d) {
-            const highlight = getSearchHighlightStyle(d.id)
-            if (highlight) return highlight.strokeOpacity
-            return 1
-          })
           .style('filter', function(d) {
             const highlight = getSearchHighlightStyle(d.id)
             if (highlight) return highlight.filter
             return 'none'
           })
+        
+        // 如果有匹配，启动闪烁效果
+        if (newMatches && newMatches.size > 0) {
+          startHighlightPulse()
+        }
       }
     })
   }
 }, { deep: true })
 </script>
+
+<style scoped>
+/* 搜索高亮闪烁动画 - 匹配类型1（红色） */
+@keyframes pulse-red {
+  0%, 100% {
+    stroke: #ff0000;
+    stroke-width: 6;
+    filter: drop-shadow(0 0 12px rgba(255, 0, 0, 1));
+  }
+  50% {
+    stroke: #ff6666;
+    stroke-width: 8;
+    filter: drop-shadow(0 0 18px rgba(255, 0, 0, 1));
+  }
+}
+
+/* 搜索高亮闪烁动画 - 匹配类型2（橙色） */
+@keyframes pulse-orange {
+  0%, 100% {
+    stroke: #ff6600;
+    stroke-width: 5;
+    filter: drop-shadow(0 0 10px rgba(255, 102, 0, 1));
+  }
+  50% {
+    stroke: #ffaa00;
+    stroke-width: 7;
+    filter: drop-shadow(0 0 15px rgba(255, 102, 0, 1));
+  }
+}
+
+/* 搜索高亮闪烁动画 - 匹配类型3（品红） */
+@keyframes pulse-magenta {
+  0%, 100% {
+    stroke: #ff00ff;
+    stroke-width: 4;
+    filter: drop-shadow(0 0 8px rgba(255, 0, 255, 0.9));
+  }
+  50% {
+    stroke: #ff66ff;
+    stroke-width: 6;
+    filter: drop-shadow(0 0 12px rgba(255, 0, 255, 1));
+  }
+}
+
+/* 应用闪烁动画的类 */
+.node-highlight-match-3 {
+  animation: pulse-red 0.8s ease-in-out infinite;
+}
+
+.node-highlight-match-1 {
+  animation: pulse-orange 1s ease-in-out infinite;
+}
+
+.node-highlight-match-2 {
+  animation: pulse-magenta 1.2s ease-in-out infinite;
+}
+</style>

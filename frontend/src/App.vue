@@ -232,6 +232,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
+import { debounce } from 'lodash'
 import { useGraphCore } from './composables/useGraphCore'
 import Graph2D from './components/Graph2D.vue'
 import Graph3DView from './components/Graph3DView.vue'
@@ -336,11 +337,11 @@ const formatDisplayContent = (content) => {
       let formatted = JSON.stringify(parsed, null, 2)
       // 替换 \r\n 为换行符，\n 也替换为换行符，其他 \ 为空格
       formatted = formatted
-        .replace(/\\r\\n/g, '\n')
         .replace(/\\n/g, '\n')
+        .replace(/\\r/g, ' ')
         .replace(/\\t/g, '  ')
         .replace(/\\"/g, '"')
-        .replace(/\\\\/g, '\\')
+        .replace(/\\/g, '')
         // 清理连续多个空格（但保留换行）
         .split('\n')
         .map(line => line.replace(/\s+/g, ' ').trim())
@@ -445,15 +446,21 @@ const copyModalContent = async () => {
   }
 }
 
+// 防抖搜索函数 - 延迟 300ms 执行
+const debouncedSearch = debounce(() => {
+  performSearch()
+}, 300)
+
 // 搜索处理函数
 const handleSearch = () => {
-  performSearch()
+  debouncedSearch()
 }
 
 // 清除搜索
 const handleSearchClear = () => {
   searchQuery.value = ''
   searchMatches.value = new Map()
+  debouncedSearch.cancel() // 取消待执行的搜索
   ElMessage.info('已清除搜索')
 }
 
