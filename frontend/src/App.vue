@@ -31,6 +31,7 @@
           <el-radio-button value="3d">星云图</el-radio-button>
         </el-radio-group>
         <el-divider direction="vertical" />
+        <el-button @click="handleBackup" :loading="isBackingUp">💾 备份数据</el-button>
         <el-button @click="openResourceManager">⚙️ 资源管理</el-button>
       </div>
     </el-header>
@@ -250,6 +251,7 @@ const isContentModalOpen = ref(false)
 const modalContent = ref('')
 const searchQuery = ref('')
 const searchMatches = ref(new Map()) // 存储匹配结果: nodeId -> matchType (0=不匹配, 1=仅label, 2=仅content, 3=两者都匹配)
+const isBackingUp = ref(false)
 const infoCardPos = reactive({ x: 0, y: 0 }), hoverItem = reactive({ label: '', content: '' })
 const editingItem = reactive({ id: '', label: '', content: '', style: {}, type: 'node', size: 18 })
 const selectedNodeIds = ref([]), graphArea = ref(null)
@@ -585,6 +587,30 @@ const onThemeFilterChangeHandler = () => {
 }
 const openResourceManager = () => { isResourceManagerOpen.value = true }
 const handleResourceRefresh = async () => { await fetchDataFromServer() }
+
+const handleBackup = async () => {
+  if (isBackingUp.value) return
+  
+  isBackingUp.value = true
+  try {
+    const response = await fetch(`/api/backup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (!response.ok) {
+      throw new Error('Backup failed')
+    }
+    
+    const result = await response.json()
+    ElMessage.success(`备份成功！时间戳: ${result.timestamp}`)
+  } catch (error) {
+    console.error('Backup error:', error)
+    ElMessage.error('备份失败: ' + error.message)
+  } finally {
+    isBackingUp.value = false
+  }
+}
 
 onMounted(async () => { await fetchDataFromServer() })
 </script>
