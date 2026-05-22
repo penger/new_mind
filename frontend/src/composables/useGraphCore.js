@@ -1,4 +1,5 @@
 import { ref, reactive, computed } from 'vue'
+import { v4 as uuidv4 } from 'uuid'
 
 const API_BASE_URL = '/api'
 
@@ -14,8 +15,6 @@ export function useGraphCore() {
   const showLinkLabels = ref(true)
   const physicsEnabled = ref(true)
 
-  const nodeIdCounter = ref(1)
-  const linkIdCounter = ref(1)
   const resourceIdCounter = ref(1)
   const refreshKey = ref(0)
   // 用于防止主题切换时的竞态条件
@@ -25,17 +24,17 @@ export function useGraphCore() {
   const getEdgeStyle = (id) => edgeStyles.value.find(s => s.id === id) || edgeStyles.value[0]
   const getThemeName = (themeId) => themes.value.find(t => t.id === themeId)?.name || '未知'
 
+  // 生成UUID格式的ID
+  const generateNodeId = () => `N_${uuidv4()}`
+  const generateEdgeId = () => `E_${uuidv4()}`
+  const generateResourceId = () => `R_${uuidv4()}`
+
+  // 同步计数器（现在只用于资源ID）
   const syncCounters = () => {
-    if (nodes.value.length) {
-      nodeIdCounter.value = Math.max(...nodes.value.map(n => parseInt(n.id.replace('N',''))||0)) + 1
-    }
-    if (links.value.length) {
-      linkIdCounter.value = Math.max(...links.value.map(l => parseInt(l.id.replace('E',''))||0)) + 1
-    }
     resourceIdCounter.value = Math.max(
-      ...themes.value.map(t => parseInt(t.id.replace('T',''))||0),
-      ...nodeStyles.value.map(ns => parseInt(ns.id.replace('NS',''))||0),
-      ...edgeStyles.value.map(es => parseInt(es.id.replace('ES',''))||0),
+      ...themes.value.map(t => parseInt(t.id.replace(/\D/g, ''))||0),
+      ...nodeStyles.value.map(ns => parseInt(ns.id.replace(/\D/g, ''))||0),
+      ...edgeStyles.value.map(es => parseInt(es.id.replace(/\D/g, ''))||0),
       0
     ) + 1
   }
@@ -183,7 +182,7 @@ const addEdge = async (source, target) => {
       ? edgeStyles.value.find(s => s.id === theme.defaultEdgeStyleId) : edgeStyles.value[0]
 
     const newEdge = {
-      id: `E${linkIdCounter.value++}`, source: sid, target: tid, label: '', width: 2,
+      id: generateEdgeId(), source: sid, target: tid, label: '', width: 2,
       themeId: theme.id, edgeStyleId: edgeStyle?.id || edgeStyles.value[0]?.id,
       content: '', selected: false,
       style: edgeStyle ? { color: edgeStyle.color, style: edgeStyle.style, width: 2 } : null
@@ -195,15 +194,6 @@ const addEdge = async (source, target) => {
       const localEdge = links.value.find(l => l.id === newEdge.id)
       if (localEdge) {
         localEdge.id = result.id
-      }
-      // 更新linkIdCounter，确保下个ID大于这个ID
-      try {
-        const newIdNum = parseInt(result.id.replace('E', ''))
-        if (!isNaN(newIdNum) && newIdNum >= linkIdCounter.value) {
-          linkIdCounter.value = newIdNum + 1
-        }
-      } catch (e) {
-        // 如果无法解析数字，忽略
       }
     }
     return newEdge
@@ -239,7 +229,7 @@ const addEdge = async (source, target) => {
     const nodeStyle = theme.defaultNodeStyleId
       ? nodeStyles.value.find(s => s.id === theme.defaultNodeStyleId) : nodeStyles.value[0]
     const newNode = {
-      id: `N${nodeIdCounter.value++}`, label: `节点${nodeIdCounter.value - 1}`,
+      id: generateNodeId(), label: `节点${Date.now() % 10000}`,
       x, y, fx: x, fy: y, // 刚创建时默认锁定坐标，防止飘走
       themeId: theme.id, nodeStyleId: nodeStyle?.id || nodeStyles.value[0]?.id,
       size: 10, content: '', selected: true,
@@ -280,7 +270,7 @@ const addEdge = async (source, target) => {
 
   return {
     nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
-    showLinkLabels, physicsEnabled, nodeIdCounter, linkIdCounter, resourceIdCounter, refreshKey,
+    showLinkLabels, physicsEnabled, resourceIdCounter, refreshKey,
     getNodeStyle, getEdgeStyle, getThemeName, syncCounters, fetchDataFromServer,
     initDefaultData, addNode, addEdge, deleteNode, deleteEdge, deleteNodesAndRelatedEdges,
     updateNodeToServer, updateEdgeToServer, onThemeFilterChange

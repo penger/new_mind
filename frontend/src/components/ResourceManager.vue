@@ -1,9 +1,9 @@
 <template>
-  <el-drawer 
-    v-model="visible" 
-    title="资源配置中心" 
-    direction="rtl" 
-    size="700px"
+  <el-drawer
+    v-model="visible"
+    title="资源配置中心"
+    direction="rtl"
+    size="1000px"
     custom-class="resource-manager-drawer"
   >
     <template #header>
@@ -42,11 +42,17 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="sortNum" label="排序值" width="80" align="center" sortable>
+            <el-table-column prop="sortNum" label="排序值" width="100" align="center" sortable>
               <template #default="{ row }">
-                <el-tag :type="row.sortNum > 0 ? 'success' : 'info'" size="small">
-                  {{ row.sortNum || 0 }}
-                </el-tag>
+                <el-input
+                  v-model="row.sortNum"
+                  type="number"
+                  size="small"
+                  style="width: 70px;"
+                  :min="0"
+                  :max="9999"
+                  @change="handleSortNumChange(row)"
+                />
               </template>
             </el-table-column>
             <el-table-column label="默认配置" width="300">
@@ -170,22 +176,18 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="themeDialogVisible" :title="editingTheme?.id ? '编辑主题' : '新建主题'" width="480px" append-to-body>
+    <el-dialog v-model="themeDialogVisible" :title="editingTheme?.id ? '编辑主题' : '新建主题'" width="600px" append-to-body>
       <el-form :model="themeForm" label-position="top">
-        <el-form-item label="主题 ID" required>
-          <el-input v-model="themeForm.id" :disabled="!!editingTheme?.id" placeholder="例如: T_CHINA_HISTORY" />
-        </el-form-item>
         <el-form-item label="主题显示名称" required>
           <el-input v-model="themeForm.name" placeholder="请输入主题名称" />
         </el-form-item>
         <el-form-item label="排序值">
-          <el-tooltip content="数值越高，排序越靠前。首页默认显示排序最高的主题。" placement="top">
-            <el-input-number 
-              v-model="themeForm.sortNum" 
-              :min="0" 
-              :max="999" 
-              :step="1" 
-              placeholder="输入排序值"
+          <el-tooltip content="数值越高，排序越靠前。首页默认显示排序最高的主题。留空则默认为0。" placement="top">
+            <el-input
+              v-model="themeForm.sortNum"
+              type="number"
+              placeholder="输入排序值（数字）"
+              style="width: 200px;"
             />
           </el-tooltip>
         </el-form-item>
@@ -463,6 +465,30 @@ const request = async (url, method, body, callback) => {
   }
 }
 
+// 主题排序值快速更新
+const handleSortNumChange = async (theme) => {
+  try {
+    const response = await fetch(`/api/themes/${theme.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: theme.name,
+        defaultNodeStyleIds: theme.defaultNodeStyleIds,
+        defaultEdgeStyleIds: theme.defaultEdgeStyleIds,
+        sortNum: theme.sortNum || 0
+      })
+    })
+    if (response.ok) {
+      ElMessage.success('排序值已更新')
+      emit('refresh')
+    } else {
+      throw new Error('更新失败')
+    }
+  } catch (e) {
+    ElMessage.error('更新排序值失败: ' + e.message)
+  }
+}
+
 // 主题操作
 const openThemeDialog = (theme = null) => {
   editingTheme.value = theme
@@ -475,36 +501,37 @@ const openThemeDialog = (theme = null) => {
       defaultEdgeStyleId: theme.defaultEdgeStyleId || '',
       defaultNodeStyleIds: parseStyleIds(theme.defaultNodeStyleId),
       defaultEdgeStyleIds: parseStyleIds(theme.defaultEdgeStyleId),
-      sortNum: theme.sortNum || 0  // 添加排序字段
+      sortNum: Number(theme.sortNum) || 0
     }
     Object.assign(themeForm, themeData)
   } else {
-    Object.assign(themeForm, { 
-      id: `T_${Date.now()}`, 
-      name: '', 
-      defaultNodeStyleId: '', 
+    Object.assign(themeForm, {
+      name: '',
+      defaultNodeStyleId: '',
       defaultEdgeStyleId: '',
       defaultNodeStyleIds: [],
       defaultEdgeStyleIds: [],
-      sortNum: 0  // 添加排序字段
+      sortNum: 0
     })
   }
   themeDialogVisible.value = true
 }
 
 const saveTheme = () => {
-  const method = editingTheme.value?.id ? 'PUT' : 'POST'
-  const url = editingTheme.value?.id ? `/api/themes/${editingTheme.value.id}` : '/api/themes'
-  
+  const isEdit = !!editingTheme.value?.id
+  const method = isEdit ? 'PUT' : 'POST'
+  const url = isEdit ? `/api/themes/${editingTheme.value.id}` : '/api/themes'
+
   // 准备发送的数据
   const requestData = {
-    id: themeForm.id,
+    // 编辑模式下发送ID，创建模式下不发送ID（由后端生成UUID）
+    ...(isEdit && { id: editingTheme.value.id }),
     name: themeForm.name,
     defaultNodeStyleIds: themeForm.defaultNodeStyleIds,
     defaultEdgeStyleIds: themeForm.defaultEdgeStyleIds,
-    sortNum: themeForm.sortNum || 0  // 使用表单中的值而不是旧值
+    sortNum: themeForm.sortNum || 0
   }
-  
+
   request(url, method, requestData, () => themeDialogVisible.value = false)
 }
 

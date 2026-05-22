@@ -3,22 +3,22 @@ from typing import List, Optional, Dict, Any, ClassVar
 
 
 class NodeStyleModel(BaseModel):
-    id: str
+    id: Optional[str] = None
     name: str
     color: str
     shape: str
-    opacity: float
+    opacity: Optional[float] = 1.0
 
 
 class EdgeStyleModel(BaseModel):
-    id: str
+    id: Optional[str] = None
     name: str
     color: str
     line_style: str
 
 
 class ThemeModel(BaseModel):
-    id: str
+    id: Optional[str] = None
     name: str
     defaultNodeStyleId: Optional[str] = None  # 分隔符字符串：style_id_1,style_id_2,style_id_3
     defaultEdgeStyleId: Optional[str] = None  # 分隔符字符串：edge_style_1,edge_style_2

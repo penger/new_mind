@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import NodeStyle, EdgeStyle, Theme, Node, Edge
 from app.schemas import GraphDataModel, NodeModel, EdgeModel, ThemeModel, NodeStyleModel, EdgeStyleModel
 from datetime import datetime
+import uuid
 
 router = APIRouter(prefix="/api", tags=["graphs"])
 
@@ -114,19 +115,19 @@ def backup_tables(db: Session = Depends(get_db)):
     try:
         # 生成带日期时间戳的备份表名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         # 备份表名
         themes_backup = f"themes_backup_{timestamp}"
         nodes_backup = f"nodes_backup_{timestamp}"
         edges_backup = f"edges_backup_{timestamp}"
-        
+
         # 使用原生SQL执行备份（CREATE TABLE AS SELECT）
         db.execute(text(f"CREATE TABLE {themes_backup} AS SELECT * FROM themes"))
         db.execute(text(f"CREATE TABLE {nodes_backup} AS SELECT * FROM nodes"))
         db.execute(text(f"CREATE TABLE {edges_backup} AS SELECT * FROM edges"))
-        
+
         db.commit()
-        
+
         return {
             "status": "success",
             "message": "Backup completed successfully",
@@ -144,26 +145,98 @@ def backup_tables(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
 
 
+# 主题操作
+@router.post("/themes")
+def create_theme(theme: ThemeModel, db: Session = Depends(get_db)):
+    """创建单个主题，使用UUID生成唯一ID"""
+    try:
+        # 总是生成UUID格式的主题ID，忽略前端发送的ID
+        theme_id = f"T_{uuid.uuid4()}"
+
+        # 处理样式ID
+        if theme.defaultNodeStyleIds:
+            node_style_str = ThemeModel.serialize_style_ids(theme.defaultNodeStyleIds)
+        else:
+            node_style_str = theme.defaultNodeStyleId
+
+        if theme.defaultEdgeStyleIds:
+            edge_style_str = ThemeModel.serialize_style_ids(theme.defaultEdgeStyleIds)
+        else:
+            edge_style_str = theme.defaultEdgeStyleId
+
+        db_theme = Theme(
+            id=theme_id,
+            name=theme.name,
+            default_node_style_id=node_style_str,
+            default_edge_style_id=edge_style_str,
+            sort_num=theme.sortNum or 0
+        )
+        db.add(db_theme)
+        db.commit()
+        return {"status": "success", "message": "Theme created", "id": theme_id}
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/themes/{theme_id}")
+def update_theme(theme_id: str, theme: ThemeModel, db: Session = Depends(get_db)):
+    """更新或插入单个主题（upsert）"""
+    try:
+        # 处理样式ID
+        if theme.defaultNodeStyleIds:
+            node_style_str = ThemeModel.serialize_style_ids(theme.defaultNodeStyleIds)
+        else:
+            node_style_str = theme.defaultNodeStyleId
+
+        if theme.defaultEdgeStyleIds:
+            edge_style_str = ThemeModel.serialize_style_ids(theme.defaultEdgeStyleIds)
+        else:
+            edge_style_str = theme.defaultEdgeStyleId
+
+        db.merge(Theme(
+            id=theme_id,
+            name=theme.name,
+            default_node_style_id=node_style_str,
+            default_edge_style_id=edge_style_str,
+            sort_num=theme.sortNum or 0
+        ))
+        db.commit()
+        return {"status": "success", "message": "Theme updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/themes/{theme_id}")
+def delete_theme(theme_id: str, db: Session = Depends(get_db)):
+    """删除主题及其关联的节点和边"""
+    try:
+        # 先删除主题关联的节点和边
+        db.query(Edge).filter(Edge.theme_id == theme_id).delete(synchronize_session=False)
+        db.query(Node).filter(Node.theme_id == theme_id).delete(synchronize_session=False)
+
+        # 再删除主题
+        db.query(Theme).filter(Theme.id == theme_id).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "success", "message": "Theme and related data deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # 单个节点操作
 @router.post("/nodes")
 def create_node(node: NodeModel, db: Session = Depends(get_db)):
-    """创建单个节点"""
+    """创建单个节点，使用UUID生成唯一ID"""
     try:
-        existing = db.query(Node).filter(Node.id == node.id).first()
-        if existing:
-            max_id = db.query(Node).order_by(Node.id.desc()).first()
-            if max_id and max_id.id:
-                try:
-                    num = int(max_id.id.replace('N', ''))
-                    new_id = f"N{num + 1}"
-                except:
-                    new_id = f"N{max_id.id}"
-            else:
-                new_id = node.id
-            node = NodeModel(id=new_id, label=node.label, size=node.size, themeId=node.themeId, nodeStyleId=node.nodeStyleId, content=node.content, style=node.style)
-        
+        # 生成UUID格式的节点ID
+        node_id = f"N_{uuid.uuid4()}"
+
         db_node = Node(
-            id=node.id,
+            id=node_id,
             label=node.label,
             size=node.size,
             theme_id=node.themeId,
@@ -173,7 +246,111 @@ def create_node(node: NodeModel, db: Session = Depends(get_db)):
         )
         db.add(db_node)
         db.commit()
-        return {"status": "success", "message": "Node created", "id": node.id}
+        return {"status": "success", "message": "Node created", "id": node_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 节点样式操作
+@router.post("/node-styles")
+def create_node_style(node_style: NodeStyleModel, db: Session = Depends(get_db)):
+    """创建单个节点样式，使用UUID生成唯一ID"""
+    try:
+        # 生成UUID格式的样式ID
+        style_id = f"NS_{uuid.uuid4()}"
+
+        db_style = NodeStyle(
+            id=style_id,
+            name=node_style.name,
+            color=node_style.color,
+            shape=node_style.shape,
+            opacity=node_style.opacity or 1.0
+        )
+        db.add(db_style)
+        db.commit()
+        return {"status": "success", "message": "Node style created", "id": style_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/node-styles/{style_id}")
+def update_node_style(style_id: str, node_style: NodeStyleModel, db: Session = Depends(get_db)):
+    """更新或插入单个节点样式（upsert）"""
+    try:
+        db.merge(NodeStyle(
+            id=style_id,
+            name=node_style.name,
+            color=node_style.color,
+            shape=node_style.shape,
+            opacity=node_style.opacity or 1.0
+        ))
+        db.commit()
+        return {"status": "success", "message": "Node style updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/node-styles/{style_id}")
+def delete_node_style(style_id: str, db: Session = Depends(get_db)):
+    """删除节点样式"""
+    try:
+        db.query(NodeStyle).filter(NodeStyle.id == style_id).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "success", "message": "Node style deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# 边样式操作
+@router.post("/edge-styles")
+def create_edge_style(edge_style: EdgeStyleModel, db: Session = Depends(get_db)):
+    """创建单个边样式，使用UUID生成唯一ID"""
+    try:
+        # 生成UUID格式的样式ID
+        style_id = f"ES_{uuid.uuid4()}"
+
+        db_style = EdgeStyle(
+            id=style_id,
+            name=edge_style.name,
+            color=edge_style.color,
+            line_style=edge_style.line_style
+        )
+        db.add(db_style)
+        db.commit()
+        return {"status": "success", "message": "Edge style created", "id": style_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/edge-styles/{style_id}")
+def update_edge_style(style_id: str, edge_style: EdgeStyleModel, db: Session = Depends(get_db)):
+    """更新或插入单个边样式（upsert）"""
+    try:
+        db.merge(EdgeStyle(
+            id=style_id,
+            name=edge_style.name,
+            color=edge_style.color,
+            line_style=edge_style.line_style
+        ))
+        db.commit()
+        return {"status": "success", "message": "Edge style updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/edge-styles/{style_id}")
+def delete_edge_style(style_id: str, db: Session = Depends(get_db)):
+    """删除边样式"""
+    try:
+        db.query(EdgeStyle).filter(EdgeStyle.id == style_id).delete(synchronize_session=False)
+        db.commit()
+        return {"status": "success", "message": "Edge style deleted"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -211,23 +388,13 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
 
 @router.post("/edges")
 def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
-    """创建单个边"""
+    """创建单个边，使用UUID生成唯一ID"""
     try:
-        existing = db.query(Edge).filter(Edge.id == edge.id).first()
-        if existing:
-            max_id = db.query(Edge).order_by(Edge.id.desc()).first()
-            if max_id and max_id.id:
-                try:
-                    num = int(max_id.id.replace('E', ''))
-                    new_id = f"E{num + 1}"
-                except:
-                    new_id = f"E{max_id.id}"
-            else:
-                new_id = edge.id
-            edge = EdgeModel(id=new_id, source=edge.source, target=edge.target, label=edge.label, width=edge.width, themeId=edge.themeId, edgeStyleId=edge.edgeStyleId, content=edge.content, style=edge.style)
+        # 生成UUID格式的边ID
+        edge_id = f"E_{uuid.uuid4()}"
         
         db_edge = Edge(
-            id=edge.id,
+            id=edge_id,
             source_id=edge.source,
             target_id=edge.target,
             label=edge.label,
@@ -239,7 +406,7 @@ def create_edge(edge: EdgeModel, db: Session = Depends(get_db)):
         )
         db.add(db_edge)
         db.commit()
-        return {"status": "success", "message": "Edge created", "id": edge.id}
+        return {"status": "success", "message": "Edge created", "id": edge_id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
