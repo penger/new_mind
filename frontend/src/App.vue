@@ -1,15 +1,24 @@
 <template>
   <div class="app-container">
+    <!-- 登录页面 -->
+    <LoginPage v-if="!isLoggedIn" @login="handleLogin" />
+    
+    <!-- 主应用 -->
+    <template v-else>
     <el-header>
       <div class="header-left">
         <h1>关系图谱专业版</h1>
-        <el-switch 
-          v-model="isEditing" 
-          active-text="编辑模式" 
-          inactive-text="浏览模式" 
-          @change="handleEditChange" 
-          style="margin-left: 20px;" 
+        <el-switch
+          v-if="isAdmin"
+          v-model="isEditing"
+          active-text="编辑模式"
+          inactive-text="浏览模式"
+          @change="handleEditChange"
+          style="margin-left: 20px;"
         />
+        <el-tag v-if="!isAdmin" type="info" size="small" style="margin-left: 20px;">
+          👁️ 游客模式
+        </el-tag>
         <span class="status-text">{{ statusText }}</span>
       </div>
       <div class="header-right">
@@ -30,9 +39,21 @@
           <el-radio-button value="2d">平面图</el-radio-button>
           <el-radio-button value="3d">星云图</el-radio-button>
         </el-radio-group>
+        <el-divider direction="vertical" v-if="isAdmin" />
+        <el-button v-if="isAdmin" @click="handleBackup" :loading="isBackingUp">💾 备份数据</el-button>
+        <el-button v-if="isAdmin" @click="openResourceManager">⚙️ 资源管理</el-button>
         <el-divider direction="vertical" />
-        <el-button @click="handleBackup" :loading="isBackingUp">💾 备份数据</el-button>
-        <el-button @click="openResourceManager">⚙️ 资源管理</el-button>
+        <el-dropdown @command="handleUserCommand">
+          <span class="user-dropdown">
+            {{ isAdmin ? '🔐' : '👁️' }} {{ currentUser?.username || '用户' }}
+            <el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="logout">🚪 退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </el-header>
 
@@ -226,24 +247,68 @@
         </template>
       </el-dialog>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, ArrowDown } from '@element-plus/icons-vue'
 import { debounce } from 'lodash'
 import { useGraphCore } from './composables/useGraphCore'
 import Graph2D from './components/Graph2D.vue'
 import Graph3DView from './components/Graph3DView.vue'
 import ResourceManager from './components/ResourceManager.vue'
+import LoginPage from './components/LoginPage.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
   physicsEnabled, getNodeStyle, fetchDataFromServer, addNode, addEdge,
   updateNodeToServer, updateEdgeToServer, onThemeFilterChange, deleteNodesAndRelatedEdges, deleteEdge, refreshKey
 } = useGraphCore()
+
+// 用户认证状态
+const isLoggedIn = ref(false)
+const currentUser = ref(null)
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+// 登录处理
+const handleLogin = async (user) => {
+  currentUser.value = user
+  isLoggedIn.value = true
+  isEditing.value = false // 登录后默认浏览模式
+  await fetchDataFromServer()
+}
+
+// 用户菜单操作
+const handleUserCommand = (command) => {
+  if (command === 'logout') {
+    logout()
+  }
+}
+
+// 退出登录
+const logout = () => {
+  currentUser.value = null
+  isLoggedIn.value = false
+  isEditing.value = false
+  localStorage.removeItem('user')
+  ElMessage.info('已退出登录')
+}
+
+// 检查本地存储中的用户状态
+const checkAuthStatus = () => {
+  const storedUser = localStorage.getItem('user')
+  if (storedUser) {
+    try {
+      currentUser.value = JSON.parse(storedUser)
+      isLoggedIn.value = true
+    } catch (e) {
+      localStorage.removeItem('user')
+    }
+  }
+}
 
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
 const isResourceManagerOpen = ref(false)
@@ -612,7 +677,12 @@ const handleBackup = async () => {
   }
 }
 
-onMounted(async () => { await fetchDataFromServer() })
+onMounted(async () => {
+  checkAuthStatus()
+  if (isLoggedIn.value) {
+    await fetchDataFromServer()
+  }
+})
 </script>
 
 <style>
@@ -661,6 +731,21 @@ html, body, #app { margin: 0; padding: 0; height: 100vh; width: 100%; overflow: 
 
 .selection-item:last-child {
   border-bottom: none;
+}
+
+/* 用户下拉菜单样式 */
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.user-dropdown:hover {
+  background-color: #f5f7fa;
 }
 
 .node-info {
