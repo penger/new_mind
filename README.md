@@ -171,10 +171,19 @@
                  │
 ┌────────────────┴────────────────────────┐
 │         前端开发服务器 (Vite)            │
-│           Port: 5173 (开发)             │
-│           Port: 8081 (生产)             │
+│           Port: 8080                   │
 └─────────────────────────────────────────┘
 ```
+
+### 🔧 端口配置
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| 前端 (Vite) | **8080** | Vue.js 开发服务器 |
+| 后端 (FastAPI) | **8000** | Python API 服务 |
+| MySQL | 3306 | 数据库服务 |
+
+**注意**：如果 8080 端口被占用，可以修改 `frontend/vite.config.js` 中的 `server.port` 配置。
 
 ## 📐 数据模型
 
@@ -371,6 +380,36 @@ npm run dev
 
 前端开发服务器会自动热重载，**修改代码后无需手动重启**。
 
+### 停止服务
+
+#### 停止后端服务
+
+在运行后端服务的终端窗口按 `Ctrl + C` 即可停止服务。
+
+或者查找并终止进程：
+
+```bash
+# 查找占用 8000 端口的进程
+netstat -ano | findstr :8000
+
+# 终止进程（将 <PID> 替换为实际的进程 ID）
+taskkill /F /PID <PID>
+```
+
+#### 停止前端服务
+
+在运行前端服务的终端窗口按 `Ctrl + C` 即可停止服务。
+
+或者查找并终止进程：
+
+```bash
+# 查找占用 8080 端口的进程
+netstat -ano | findstr :8080
+
+# 终止进程（将 <PID> 替换为实际的进程 ID）
+taskkill /F /PID <PID>
+```
+
 ### 数据库初始化
 
 确保 MySQL 中存在 `graph_db` 数据库：
@@ -381,7 +420,7 @@ CREATE DATABASE IF NOT EXISTS graph_db CHARACTER SET utf8mb4 COLLATE utf8mb4_uni
 
 ### 访问应用
 
-- 前端界面：http://localhost:5173
+- 前端界面：http://localhost:8080
 - 后端 API：http://localhost:8000
 - API 文档：http://localhost:8000/docs
 
