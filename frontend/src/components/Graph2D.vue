@@ -1,6 +1,6 @@
 <template>
   <div class="graph-container" ref="containerRef" style="width: 100%; height: 100%; position: relative;">
-    <svg ref="svgRef" class="graph-2d-svg">
+    <svg ref="svgRef" class="graph-2d-svg" width="100%" height="100%">
       <g ref="mainGroup">
         <line ref="ghostLineRef" style="stroke: #409eff; stroke-dasharray: 5; stroke-width: 2; display: none; pointer-events: none;" />
         <g id="links-group"></g>
@@ -277,74 +277,82 @@ function dragEnded(e, d) {
 
 onMounted(() => {
   nextTick(() => {
-    const w = svgRef.value.clientWidth, h = svgRef.value.clientHeight
+    // 确保SVG有正确的尺寸
+    let w = svgRef.value?.clientWidth || 800
+    let h = svgRef.value?.clientHeight || 600
     
-    // 专业级物理参数优化 - 增强分散和稳定性
-    simulation = d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.id).distance(90).strength(0.8))  // 增加距离，增强连接力
-      .force('charge', d3.forceManyBody().strength(-300).distanceMax(300))      // 增强排斥力，扩大最大作用距离
-      .force('center', d3.forceCenter(w/2, h/2).strength(0.1))                  // 减弱中心引力
-      .force('collision', d3.forceCollide().radius(60))                         // 增加碰撞半径
-      .velocityDecay(0.2) // 增加摩擦力，让节点更快停稳
-      .alphaDecay(0.02)   // 减慢冷却速度，给予更多时间找到平衡位置
-      .on('tick', ticked)
-
-    zoom = d3.zoom().scaleExtent([0.1, 5]).on('zoom', (e) => { 
-      currentTransform = e.transform
-      d3.select(mainGroup.value).attr('transform', e.transform) 
-    })
-    
-    d3.select(svgRef.value).call(zoom).on('dblclick.zoom', null)
-      .on('dblclick', (e) => { 
-        if (props.mode === 'edit') { 
-          const [mx, my] = d3.pointer(e, svgRef.value);
-          const [ix, iy] = currentTransform.invert([mx, my]);
-          emit('node-add', { x: ix, y: iy });
-        } 
-      })
-    
-    // 监听窗口大小
-    resizeObserver = new ResizeObserver(() => {
-      if (svgRef.value) {
-        const nw = svgRef.value.clientWidth, nh = svgRef.value.clientHeight;
-        simulation.force('center', d3.forceCenter(nw/2, nh/2));
-        if (props.mode === 'view' && props.physicsEnabled) simulation.alpha(0.05).restart();
-      }
-    })
-    resizeObserver.observe(containerRef.value)
-
-    isStabilizing.value = true;
-    syncD3Data(); // 先同步数据
-    
-    // --- 核心优化：静默预热 (Silent Pre-tick) ---
-    // 动态计算预热次数：基础600次 + 每2个节点增加1次
-    const preTickCount = 600 + Math.floor((props.nodes?.length || 0) / 2);
-    console.log(`🔧 静默预热开始：${props.nodes?.length || 0}个节点，预计算${preTickCount}次`);
-    
-    for (let i = 0; i < preTickCount; ++i) simulation.tick();
-    
-    // 关键优化：预热后重置所有节点的速度，防止晃动
-    d3Nodes.forEach(n => { n.vx = 0; n.vy = 0; });
-    
-    renderGraph(); // 此时再进行首屏渲染，节点已经是稳定的了
-
-    // 动态计算等待时间：根据预热次数调整
-    const stabilizationDelay = Math.max(100, Math.min(500, 50 + preTickCount / 10));
-    console.log(`⏱️ 等待${stabilizationDelay}ms后完成稳定`);
-    
-    setTimeout(() => {
-      isStabilizing.value = false;
-      console.log(`✅ 布局稳定完成，准备显示`);
-      if (props.mode === 'edit') {
-        simulation.stop();
-        d3Nodes.forEach(d => { d.fx = d.x; d.fy = d.y });
-      }
-      // 平滑居中
-      d3.select(svgRef.value).transition().duration(800).call(zoom.transform, d3.zoomIdentity)
-      ticked();
-    }, stabilizationDelay);
+    // 如果尺寸为0，等待容器渲染完成
+    if (w === 0 || h === 0) {
+      setTimeout(() => {
+        w = svgRef.value?.clientWidth || 800
+        h = svgRef.value?.clientHeight || 600
+        initializeGraph(w, h)
+      }, 100)
+    } else {
+      initializeGraph(w, h)
+    }
   })
 })
+
+const initializeGraph = (w, h) => {
+  // 专业级物理参数优化 - 增强分散和稳定性
+  simulation = d3.forceSimulation()
+    .force('link', d3.forceLink().id(d => d.id).distance(90).strength(0.8))
+    .force('charge', d3.forceManyBody().strength(-300).distanceMax(300))
+    .force('center', d3.forceCenter(w/2, h/2).strength(0.1))
+    .force('collision', d3.forceCollide().radius(60))
+    .velocityDecay(0.2)
+    .alphaDecay(0.02)
+    .on('tick', ticked)
+
+  zoom = d3.zoom().scaleExtent([0.1, 5]).on('zoom', (e) => { 
+    currentTransform = e.transform
+    d3.select(mainGroup.value).attr('transform', e.transform) 
+  })
+  
+  d3.select(svgRef.value).call(zoom).on('dblclick.zoom', null)
+    .on('dblclick', (e) => { 
+      if (props.mode === 'edit') { 
+        const [mx, my] = d3.pointer(e, svgRef.value);
+        const [ix, iy] = currentTransform.invert([mx, my]);
+        emit('node-add', { x: ix, y: iy });
+      } 
+    })
+    
+  // 监听窗口大小
+  resizeObserver = new ResizeObserver(() => {
+    if (svgRef.value) {
+      const nw = svgRef.value.clientWidth, nh = svgRef.value.clientHeight;
+      simulation.force('center', d3.forceCenter(nw/2, nh/2));
+      if (props.mode === 'view' && props.physicsEnabled) simulation.alpha(0.05).restart();
+    }
+  })
+  resizeObserver.observe(containerRef.value)
+
+  isStabilizing.value = true;
+  syncD3Data();
+  
+  // 静默预热
+  const preTickCount = 600 + Math.floor((props.nodes?.length || 0) / 2);
+  
+  for (let i = 0; i < preTickCount; ++i) simulation.tick();
+  
+  d3Nodes.forEach(n => { n.vx = 0; n.vy = 0; });
+  
+  renderGraph();
+
+  const stabilizationDelay = Math.max(100, Math.min(500, 50 + preTickCount / 10));
+  
+  setTimeout(() => {
+    isStabilizing.value = false;
+    if (props.mode === 'edit') {
+      simulation.stop();
+      d3Nodes.forEach(d => { d.fx = d.x; d.fy = d.y });
+    }
+    d3.select(svgRef.value).transition().duration(800).call(zoom.transform, d3.zoomIdentity)
+    ticked();
+  }, stabilizationDelay);
+}
 
 onUnmounted(() => { if (resizeObserver) resizeObserver.disconnect() })
 

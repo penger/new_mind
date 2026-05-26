@@ -9,7 +9,7 @@
       <div class="header-left">
         <h1>关系图谱专业版</h1>
         <el-switch
-          v-if="isAdmin"
+          v-if="isAdmin || canEditCurrentTheme"
           v-model="isEditing"
           active-text="编辑模式"
           inactive-text="浏览模式"
@@ -18,6 +18,9 @@
         />
         <el-tag v-if="!isAdmin" type="info" size="small" style="margin-left: 20px;">
           👁️ 游客模式
+        </el-tag>
+        <el-tag v-else-if="isAdmin && !canEditCurrentTheme" type="warning" size="small" style="margin-left: 20px;">
+          ⚠️ 只读主题
         </el-tag>
         <span class="status-text">{{ statusText }}</span>
       </div>
@@ -50,6 +53,7 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="manageUsers" v-if="isAdmin">👥 管理用户</el-dropdown-item>
               <el-dropdown-item command="logout">🚪 退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -63,9 +67,27 @@
           <template #header><span class="card-title">图层控制</span></template>
           <el-form label-position="top" size="small">
             <el-form-item label="主题过滤">
-              <el-select v-model="activeThemeFilter" @change="onThemeFilterChangeHandler" style="width: 100%">
-                <el-option v-for="theme in themes" :key="theme.id" :label="theme.name" :value="theme.id" />
+              <el-select 
+                v-if="isDataLoaded && hasAccessibleThemes"
+                v-model="activeThemeFilter" 
+                @change="onThemeFilterChangeHandler" 
+                style="width: 100%"
+                placeholder="请选择主题"
+                clearable
+              >
+                <el-option 
+                  v-for="theme in accessibleThemes" 
+                  :key="theme.id" 
+                  :label="theme.name" 
+                  :value="theme.id" 
+                />
               </el-select>
+              <div v-else-if="!isDataLoaded" class="loading-text">
+                加载中...
+              </div>
+              <div v-else class="warning-text">
+                暂无可访问的主题，请联系管理员分配
+              </div>
             </el-form-item>
           </el-form>
         </el-card>
@@ -231,6 +253,12 @@
         @refresh="handleResourceRefresh"
       />
 
+      <UserManager
+        v-model="isUserManagerOpen"
+        :allThemes="themes"
+        @refresh="handleUserManagerRefresh"
+      />
+
       <!-- 内容查看模态框 -->
       <el-dialog
         v-model="isContentModalOpen"
@@ -261,11 +289,12 @@ import Graph2D from './components/Graph2D.vue'
 import Graph3DView from './components/Graph3DView.vue'
 import ResourceManager from './components/ResourceManager.vue'
 import LoginPage from './components/LoginPage.vue'
+import UserManager from './components/UserManager.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
   physicsEnabled, getNodeStyle, fetchDataFromServer, addNode, addEdge,
-  updateNodeToServer, updateEdgeToServer, onThemeFilterChange, deleteNodesAndRelatedEdges, deleteEdge, refreshKey
+  updateNodeToServer, updateEdgeToServer, onThemeFilterChange, deleteNodesAndRelatedEdges, deleteEdge, refreshKey, isDataLoaded
 } = useGraphCore()
 
 // 用户认证状态
@@ -273,18 +302,102 @@ const isLoggedIn = ref(false)
 const currentUser = ref(null)
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
+// 根据用户权限过滤可访问的主题
+const accessibleThemes = computed(() => {
+  // 确保themes是一个数组（themes是ref，需要使用.value访问）
+  const themesArray = Array.isArray(themes.value) ? themes.value : []
+  
+  if (isAdmin.value) {
+    // 管理员可以访问所有主题
+    return themesArray
+  }
+  
+  // 普通用户只能访问分配给他的主题
+  const userThemeIds = (currentUser.value?.themes || []).map(t => t.theme_id)
+  return themesArray.filter(theme => userThemeIds.includes(theme.id))
+})
+
+// 检查是否有可访问的主题
+const hasAccessibleThemes = computed(() => {
+  return accessibleThemes.value.length > 0
+})
+
+// 检查activeThemeFilter对应的主题是否在accessibleThemes中
+const isCurrentThemeAccessible = computed(() => {
+  if (!activeThemeFilter.value) return false
+  return accessibleThemes.value.some(t => t.id === activeThemeFilter.value)
+})
+
+// 获取当前选中的主题名称
+const currentThemeName = computed(() => {
+  if (!activeThemeFilter.value) return ''
+  const theme = accessibleThemes.value.find(t => t.id === activeThemeFilter.value)
+  return theme?.name || activeThemeFilter.value || '未知主题'
+})
+
+// 检查当前用户对当前主题是否有编辑权限
+const canEditCurrentTheme = computed(() => {
+  if (isAdmin.value) {
+    return true
+  }
+  
+  const userTheme = currentUser.value?.themes?.find(t => t.theme_id === activeThemeFilter.value)
+  return userTheme?.can_edit === true
+})
+
 // 登录处理
 const handleLogin = async (user) => {
   currentUser.value = user
   isLoggedIn.value = true
   isEditing.value = false // 登录后默认浏览模式
-  await fetchDataFromServer()
+  await fetchDataFromServer(undefined, true)
 }
+
+// 监听isDataLoaded变化，确保主题过滤正确设置
+watch(isDataLoaded, (loaded) => {
+  if (loaded) {
+    // 数据加载完成后，确保activeThemeFilter指向有效的主题
+    const currentTheme = accessibleThemes.value.find(t => t.id === activeThemeFilter.value)
+    
+    if (!currentTheme && accessibleThemes.value.length > 0) {
+      // 当前选择的主题无效，切换到第一个主题
+      activeThemeFilter.value = accessibleThemes.value[0].id
+      onThemeFilterChange(activeThemeFilter.value)
+    } else if (currentTheme) {
+      // 当前选择的主题有效，更新visibleThemes
+      visibleThemes.value = new Set([activeThemeFilter.value])
+    }
+  }
+})
+
+// 监听用户主题权限变化
+watch(() => currentUser.value?.themes, () => {
+  // 当用户主题权限变化时，重新检查当前选择的主题是否有效
+  if (isDataLoaded.value && activeThemeFilter.value) {
+    const hasAccess = accessibleThemes.value.some(t => t.id === activeThemeFilter.value)
+    if (!hasAccess && accessibleThemes.value.length > 0) {
+      activeThemeFilter.value = accessibleThemes.value[0].id
+    }
+  }
+}, { deep: true })
+
+// 监听accessibleThemes变化，确保下拉框选择的主题和实际主题同步
+watch([accessibleThemes, activeThemeFilter], ([themes, currentFilter]) => {
+  if (themes.length > 0 && currentFilter) {
+    const themeExists = themes.some(t => t.id === currentFilter)
+    if (!themeExists) {
+      // 如果当前选择的主题不在列表中，切换到第一个主题
+      activeThemeFilter.value = themes[0].id
+    }
+  }
+}, { immediate: true })
 
 // 用户菜单操作
 const handleUserCommand = (command) => {
   if (command === 'logout') {
     logout()
+  } else if (command === 'manageUsers') {
+    isUserManagerOpen.value = true
   }
 }
 
@@ -295,6 +408,10 @@ const logout = () => {
   isEditing.value = false
   localStorage.removeItem('user')
   ElMessage.info('已退出登录')
+}
+
+const handleUserManagerRefresh = () => {
+  // 用户管理刷新后的回调，可以添加额外的逻辑
 }
 
 // 检查本地存储中的用户状态
@@ -312,6 +429,7 @@ const checkAuthStatus = () => {
 
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
 const isResourceManagerOpen = ref(false)
+const isUserManagerOpen = ref(false)
 const isContentModalOpen = ref(false)
 const modalContent = ref('')
 const searchQuery = ref('')
@@ -680,9 +798,27 @@ const handleBackup = async () => {
 onMounted(async () => {
   checkAuthStatus()
   if (isLoggedIn.value) {
-    await fetchDataFromServer()
+    await fetchDataFromServer(undefined, true)
   }
 })
+
+// 监听主题变化，如果切换到没有编辑权限的主题，自动关闭编辑模式
+watch(activeThemeFilter, () => {
+  if (!canEditCurrentTheme.value && isEditing.value) {
+    isEditing.value = false
+    ElMessage.warning('当前主题没有编辑权限')
+  }
+})
+
+// 当可访问的主题列表变化时，如果当前选择的主题不在列表中，自动切换到第一个主题
+watch(accessibleThemes, (newThemes) => {
+  if (newThemes.length > 0 && activeThemeFilter.value) {
+    const currentExists = newThemes.some(t => t.id === activeThemeFilter.value)
+    if (!currentExists) {
+      activeThemeFilter.value = newThemes[0].id
+    }
+  }
+}, { deep: true })
 </script>
 
 <style>
@@ -697,6 +833,22 @@ html, body, #app { margin: 0; padding: 0; height: 100vh; width: 100%; overflow: 
 .graph-area { flex: 1; position: relative; min-width: 0; background: #f5f7fa; overflow: hidden; }
 
 .graph-area svg { display: block; width: 100%; height: 100%; }
+
+/* 侧边栏卡片样式 */
+.sidebar-card { border: none; box-shadow: none; }
+.sidebar-card :deep(.el-card__header) { padding: 12px 16px; border-bottom: 1px solid #ebeef5; }
+.sidebar-card :deep(.el-card__body) { padding: 16px; }
+
+/* 主题过滤下拉框样式 */
+.el-select { width: 100% !important; }
+.el-select :deep(.el-input__wrapper) { width: 100%; }
+.el-form-item { margin-bottom: 12px; }
+.el-form-item__label { padding: 0 0 8px 0 !important; font-weight: 500; color: #303133; }
+
+/* 加载和警告文本样式 */
+.loading-text { color: #909399; font-size: 12px; padding: 8px 0; }
+.warning-text { color: #e6a23c; font-size: 12px; padding: 8px 0; }
+
 .info-card { position: absolute; background: rgba(255,255,255,0.95); border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); padding: 10px; z-index: 2000; pointer-events: none; border: 1px solid #ebeef5; max-width: 250px; }
 .empty-text { padding: 40px; text-align: center; color: #909399; font-size: 13px; }
 
@@ -759,25 +911,5 @@ html, body, #app { margin: 0; padding: 0; height: 100vh; width: 100%; overflow: 
   color: #303133;
   margin-bottom: 4px;
   word-break: break-word;
-}
-
-.node-content {
-  font-size: 12px;
-  color: #606266;
-  line-height: 1.4;
-  background-color: #f8f9fa;
-  padding: 6px 8px;
-  border-radius: 4px;
-  border-left: 3px solid #409eff;
-  margin-top: 4px;
-  word-break: break-word;
-  white-space: pre-line; /* 保留换行符 */
-}
-
-.empty-content {
-  font-size: 11px;
-  color: #909399;
-  font-style: italic;
-  margin-top: 2px;
 }
 </style>

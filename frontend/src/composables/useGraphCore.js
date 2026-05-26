@@ -9,6 +9,7 @@ export function useGraphCore() {
   const nodeStyles = ref([])
   const edgeStyles = ref([])
   const themes = ref([])
+  const isDataLoaded = ref(false)
 
   const activeThemeFilter = ref(null)
   const visibleThemes = ref(new Set())
@@ -39,8 +40,13 @@ export function useGraphCore() {
     ) + 1
   }
 
-  const fetchDataFromServer = async (themeId = undefined) => {
+  const fetchDataFromServer = async (themeId = undefined, initialLoad = false) => {
     try {
+      // 只在首次加载时重置加载状态
+      if (initialLoad) {
+        isDataLoaded.value = false
+      }
+      
       const targetThemeId = themeId !== undefined && themeId !== null && themeId !== '' ? themeId : ''
       currentFetchThemeId = targetThemeId
       
@@ -50,27 +56,60 @@ export function useGraphCore() {
         links.value = []
       }
       
+      // 获取当前用户信息
+      const userData = localStorage.getItem('user')
+      const headers = { 'Content-Type': 'application/json' }
+      if (userData) {
+        const user = JSON.parse(userData)
+        headers['X-User-Id'] = user.id
+        headers['X-User-Role'] = user.role
+      }
+      
       const url = themeId !== undefined && themeId !== null && themeId !== ''
         ? `${API_BASE_URL}/data?theme_id=${encodeURIComponent(themeId)}`
         : `${API_BASE_URL}/data`
-      const response = await fetch(url)
+      const response = await fetch(url, { headers })
       if (!response.ok) throw new Error('网络错误')
       const data = await response.json()
       
       // 防止竞态条件：检查是否仍然是当前请求的主题
       if (currentFetchThemeId === targetThemeId) {
-        nodeStyles.value = data.nodeStyles || []
-        edgeStyles.value = data.edgeStyles || []
-        themes.value = data.themes || []
+        // 只在首次加载时更新主题列表和样式
+        if (initialLoad || themes.value.length === 0) {
+          nodeStyles.value = data.nodeStyles || []
+          edgeStyles.value = data.edgeStyles || []
+          themes.value = data.themes || []
+          themes.value.sort((a, b) => (b.sortNum || 0) - (a.sortNum || 0))
+          
+          // 首次加载时重置activeThemeFilter
+          if (initialLoad) {
+            activeThemeFilter.value = null
+          }
+        }
+        
         nodes.value = data.nodes || []
         links.value = data.links || []
         syncCounters()
-        themes.value.sort((a, b) => (b.sortNum || 0) - (a.sortNum || 0))
+        
+        // 数据加载完成后设置标记
+        isDataLoaded.value = true
+        
+        // 确保activeThemeFilter设置在themes数据之后
         if (themeId !== undefined && themeId !== null && themeId !== '') {
           visibleThemes.value = new Set([themeId])
+          activeThemeFilter.value = themeId
         } else {
-          visibleThemes.value = new Set([themes.value[0]?.id])
-          activeThemeFilter.value = themes.value[0]?.id || null
+          // 只有当activeThemeFilter为空或无效时才设置默认值
+          if (!activeThemeFilter.value || !themes.value.find(t => t.id === activeThemeFilter.value)) {
+            const firstTheme = themes.value[0]
+            if (firstTheme) {
+              visibleThemes.value = new Set([firstTheme.id])
+              activeThemeFilter.value = firstTheme.id
+            }
+          } else {
+            // 保持当前选择，但更新visibleThemes
+            visibleThemes.value = new Set([activeThemeFilter.value])
+          }
         }
       } else {
         console.log(`🔄 忽略过期的主题数据：请求了 ${targetThemeId}，但当前需要的是 ${currentFetchThemeId}`)
@@ -265,12 +304,12 @@ const addEdge = async (source, target) => {
   const onThemeFilterChange = async (themeId) => {
     activeThemeFilter.value = themeId
     refreshKey.value++
-    await fetchDataFromServer(themeId)
+    await fetchDataFromServer(themeId, false)
   }
 
   return {
     nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
-    showLinkLabels, physicsEnabled, resourceIdCounter, refreshKey,
+    showLinkLabels, physicsEnabled, resourceIdCounter, refreshKey, isDataLoaded,
     getNodeStyle, getEdgeStyle, getThemeName, syncCounters, fetchDataFromServer,
     initDefaultData, addNode, addEdge, deleteNode, deleteEdge, deleteNodesAndRelatedEdges,
     updateNodeToServer, updateEdgeToServer, onThemeFilterChange

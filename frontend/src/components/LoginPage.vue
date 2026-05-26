@@ -2,34 +2,31 @@
   <div class="login-container" ref="containerRef">
     <canvas ref="canvasRef" class="particle-canvas"></canvas>
     <div class="login-wrapper">
-      <h1 class="title">🧠 知识图谱</h1>
+      <h1 class="title">知识图谱</h1>
       <div class="login-panel">
-        <div class="role-selector">
-          <div 
-            class="role-btn"
-            :class="{ active: loginForm.role === 'viewer' }"
-            @click="loginForm.role = 'viewer'"
-          >
-            <span class="role-icon">👁️</span>
-            <span class="role-text">游客</span>
-          </div>
-          <div 
-            class="role-btn"
-            :class="{ active: loginForm.role === 'admin' }"
-            @click="loginForm.role = 'admin'"
-          >
-            <span class="role-icon">🔐</span>
-            <span class="role-text">管理员</span>
-          </div>
-        </div>
-        
-        <div class="password-input" v-if="loginForm.role === 'admin'">
+        <div class="input-group">
           <input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="密钥"
+            v-model="username"
+            type="text"
+            placeholder="用户名"
             @keyup.enter="handleLogin"
           />
+        </div>
+        
+        <div class="input-group">
+          <input
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="密码"
+            @keyup.enter="handleLogin"
+          />
+          <button 
+            class="toggle-password"
+            @click="showPassword = !showPassword"
+            type="button"
+          >
+            {{ showPassword ? '🙈' : '👁️' }}
+          </button>
         </div>
         
         <button 
@@ -38,28 +35,29 @@
           :disabled="loading"
           @click="handleLogin"
         >
-          <span v-if="!loading">
-            {{ loginForm.role === 'admin' ? '管理员登录' : '游客登录' }}
-          </span>
+          <span v-if="!loading">登录</span>
           <span v-else class="loading-dots">登录中...</span>
         </button>
+        
+        <div class="error-message" v-if="errorMessage">
+          {{ errorMessage }}
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const emit = defineEmits(['login'])
 
-const loginForm = reactive({
-  role: 'viewer',
-  password: ''
-})
-
+const username = ref('')
+const password = ref('')
 const loading = ref(false)
+const errorMessage = ref('')
+const showPassword = ref(false)
 const containerRef = ref(null)
 const canvasRef = ref(null)
 
@@ -172,42 +170,53 @@ function handleResize() {
 }
 
 const handleLogin = async () => {
-  if (loginForm.role === 'admin') {
-    if (!loginForm.password) {
-      ElMessage.warning('请输入密钥')
-      return
-    }
-    
-    const password = loginForm.password
-    const today = new Date()
-    const currentDateStr = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
-    
-    const hasHappy = password.toLowerCase().includes('happy')
-    const hasTodayDate = password.includes(currentDateStr)
-    
-    if (!hasHappy || !hasTodayDate) {
-      ElMessage.error('密钥无效')
-      return
-    }
+  errorMessage.value = ''
+  
+  if (!username.value) {
+    errorMessage.value = '请输入用户名'
+    return
+  }
+  
+  if (!password.value) {
+    errorMessage.value = '请输入密码'
+    return
   }
   
   loading.value = true
   
   try {
-    await new Promise(resolve => setTimeout(resolve, 300))
+    const response = await fetch(`/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username: username.value,
+        password: password.value
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (!response.ok) {
+      throw new Error(data.detail || '登录失败')
+    }
     
     const userData = {
-      role: loginForm.role,
-      username: loginForm.role === 'admin' ? 'admin' : 'viewer',
+      id: data.id,
+      role: data.role,
+      username: data.username,
+      themes: data.themes || [],
       loginTime: new Date().toISOString()
     }
     
     localStorage.setItem('user', JSON.stringify(userData))
     
-    ElMessage.success(loginForm.role === 'admin' ? '管理员登录成功' : '游客登录成功')
     emit('login', userData)
+    ElMessage.success(`${data.role === 'admin' ? '管理员' : '游客'}登录成功`)
+    
   } catch (error) {
-    ElMessage.error('登录失败')
+    errorMessage.value = error.message || '登录失败，请检查用户名和密码'
   } finally {
     loading.value = false
   }
@@ -285,50 +294,16 @@ onUnmounted(() => {
   max-width: 320px;
 }
 
-.role-selector {
-  display: flex;
-  gap: 12px;
-}
-
-.role-btn {
-  flex: 1;
+.input-group {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 14px 20px;
-  background: rgba(51, 65, 85, 0.5);
-  border: 1px solid rgba(129, 140, 248, 0.15);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.role-btn:hover {
-  background: rgba(129, 140, 248, 0.15);
-  border-color: rgba(129, 140, 248, 0.3);
-  transform: translateY(-2px);
-}
-
-.role-btn.active {
-  background: linear-gradient(135deg, rgba(129, 140, 248, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
-  border-color: rgba(129, 140, 248, 0.5);
-  box-shadow: 0 0 20px rgba(129, 140, 248, 0.2);
-}
-
-.role-icon {
-  font-size: 18px;
-}
-
-.role-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: #e2e8f0;
-}
-
-.password-input input {
+.input-group input {
   width: 100%;
   padding: 14px 18px;
+  padding-right: 45px;
   background: rgba(51, 65, 85, 0.6);
   border: 1px solid rgba(129, 140, 248, 0.2);
   border-radius: 12px;
@@ -339,13 +314,23 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-.password-input input::placeholder {
+.input-group input::placeholder {
   color: #94a3b8;
 }
 
-.password-input input:focus {
+.input-group input:focus {
   border-color: rgba(129, 140, 248, 0.5);
   box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
 }
 
 .login-btn {
@@ -390,5 +375,15 @@ onUnmounted(() => {
   0%, 20% { content: '.'; }
   40% { content: '..'; }
   60%, 100% { content: '...'; }
+}
+
+.error-message {
+  text-align: center;
+  color: #f87171;
+  font-size: 14px;
+  padding: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
 }
 </style>

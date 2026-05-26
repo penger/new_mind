@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Float, ForeignKey, Text, JSON, Integer
+from sqlalchemy import Column, String, Float, ForeignKey, Text, JSON, Integer, DateTime
+from datetime import datetime
 from app.database import Base
 
 
@@ -23,8 +24,8 @@ class Theme(Base):
     __tablename__ = 'themes'
     id = Column(String(50), primary_key=True)
     name = Column(String(50), nullable=False)
-    default_node_style_id = Column(Text)  # 使用Text类型存储分隔符字符串，支持更长的内容
-    default_edge_style_id = Column(Text)  # 使用Text类型存储分隔符字符串，支持更长的内容
+    default_node_style_id = Column(Text)
+    default_edge_style_id = Column(Text)
     sort_num = Column(Integer, default=0)
 
 
@@ -50,3 +51,22 @@ class Edge(Base):
     edge_style_id = Column(String(50), ForeignKey('edge_styles.id', ondelete='SET NULL'))
     content = Column(Text, nullable=True)
     style = Column(JSON, nullable=True)
+
+
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(String(50), primary_key=True)
+    username = Column(String(100), nullable=False, unique=True)
+    password = Column(String(255), nullable=False)
+    role = Column(String(20), nullable=False, default='viewer')
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class UserTheme(Base):
+    __tablename__ = 'user_themes'
+    id = Column(String(50), primary_key=True)
+    user_id = Column(String(50), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    theme_id = Column(String(50), ForeignKey('themes.id', ondelete='CASCADE'), nullable=False)
+    can_edit = Column(String(10), default='false')
+    created_at = Column(DateTime, default=datetime.now)

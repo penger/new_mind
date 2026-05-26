@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
-from app.models import NodeStyle, EdgeStyle, Theme, Node, Edge
+from app.models import NodeStyle, EdgeStyle, Theme, Node, Edge, User, UserTheme
 from app.schemas import GraphDataModel, NodeModel, EdgeModel, ThemeModel, NodeStyleModel, EdgeStyleModel
 from datetime import datetime
 import uuid
@@ -10,20 +10,75 @@ import uuid
 router = APIRouter(prefix="/api", tags=["graphs"])
 
 
+def get_current_user_optional(
+    x_user_id: str = Header(None, description="用户ID"),
+    x_user_role: str = Header(None, description="用户角色"),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户信息（可选，未登录时返回None）"""
+    if not x_user_id:
+        return None
+    
+    user = db.query(User).filter(User.id == x_user_id).first()
+    if not user:
+        return None
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role
+    }
+
+
+def get_user_accessible_themes(db: Session, user_id: str = None, user_role: str = None):
+    """获取用户可访问的主题列表"""
+    if user_role == 'admin':
+        # 管理员可以访问所有主题
+        return db.query(Theme).all()
+    
+    if not user_id:
+        # 未登录用户不能访问任何主题
+        return []
+    
+    # 获取用户的主题权限
+    user_themes = db.query(UserTheme).filter(UserTheme.user_id == user_id).all()
+    theme_ids = [ut.theme_id for ut in user_themes]
+    
+    if not theme_ids:
+        return []
+    
+    return db.query(Theme).filter(Theme.id.in_(theme_ids)).all()
+
+
 @router.get("/data")
-def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
+def get_graph_data(
+    theme_id: str = None, 
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user_optional)
+):
     try:
-        themes = db.query(Theme).all()
+        # 根据当前用户权限获取可访问的主题
+        accessible_themes = get_user_accessible_themes(
+            db, 
+            user_id=current_user['id'] if current_user else None,
+            user_role=current_user['role'] if current_user else None
+        )
+        
+        # 获取所有样式（样式不进行权限过滤）
         node_styles = db.query(NodeStyle).all()
         edge_styles = db.query(EdgeStyle).all()
         
         # 如果没有指定theme_id，则使用默认主题（sort_num最高的主题）
-        if not theme_id and themes:
+        if not theme_id and accessible_themes:
             # 找到sort_num最高的主题作为默认主题
-            default_theme = max(themes, key=lambda t: t.sort_num if t.sort_num is not None else -1)
+            default_theme = max(accessible_themes, key=lambda t: t.sort_num if t.sort_num is not None else -1)
             theme_id = default_theme.id
         
         if theme_id:
+            # 确保用户有权限访问这个主题
+            if not any(t.id == theme_id for t in accessible_themes):
+                raise HTTPException(status_code=403, detail="没有权限访问该主题")
+            
             nodes = db.query(Node).filter(Node.theme_id == theme_id).all()
             edges = db.query(Edge).filter(
                 Edge.theme_id == theme_id,
@@ -37,7 +92,7 @@ def get_graph_data(theme_id: str = None, db: Session = Depends(get_db)):
         
         # 格式化theme数据，包含分隔符字符串和解析后的数组
         formatted_themes = []
-        for t in themes:
+        for t in accessible_themes:
             theme_data = {
                 "id": t.id,
                 "name": t.name,
