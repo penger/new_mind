@@ -769,7 +769,10 @@ const onThemeFilterChangeHandler = () => {
   onThemeFilterChange(activeThemeFilter.value)
 }
 const openResourceManager = () => { isResourceManagerOpen.value = true }
-const handleResourceRefresh = async () => { await fetchDataFromServer() }
+const handleResourceRefresh = async () => { 
+  themes.value = [] 
+  await fetchDataFromServer() 
+}
 
 const handleBackup = async () => {
   if (isBackingUp.value) return
