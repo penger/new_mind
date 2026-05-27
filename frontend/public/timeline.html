@@ -168,13 +168,16 @@
                             <template #header>
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <strong>{{ person.name }}</strong>
-                                    <el-tag size="small" type="success">{{ getAge(person) }}岁</el-tag>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <el-tag size="small" type="success">{{ getAge(person) }}岁</el-tag>
+                                        <el-tag v-if="getFinalLifespan(person)" size="small" type="info" effect="plain">寿 {{ getFinalLifespan(person) }}岁</el-tag>
+                                        <el-tag v-else size="small" type="success" effect="plain">在世</el-tag>
+                                    </div>
                                 </div>
                             </template>
                             <div style="font-size: 13px; color: #606266;">
                                 <p v-if="person.birth_date">📆 出生: {{ person.birth_date }}</p>
                                 <p v-if="person.death_date">⚰️ 逝世: {{ person.death_date }}</p>
-                                <p v-else style="color: #67C23A;">✅ 在世</p>
                                 <p v-if="person.bio" style="margin-top: 8px;">{{ person.bio.substring(0, 100) }}...</p>
                             </div>
                         </el-card>
@@ -278,9 +281,16 @@
                     const birthYear = parseInt(person.birth_date.split('-')[0]);
                     if (person.death_date) {
                         const deathYear = parseInt(person.death_date.split('-')[0]);
+                        if (currentYear.value < birthYear) return '未出生';
+                        if (currentYear.value > deathYear) return `已故 (${deathYear - birthYear}岁)`;
                         return deathYear - birthYear;
                     }
                     return currentYear.value - birthYear;
+                };
+                
+                const getFinalLifespan = (person) => {
+                    if (!person.birth_date || !person.death_date) return null;
+                    return parseInt(person.death_date.split('-')[0]) - parseInt(person.birth_date.split('-')[0]);
                 };
 
                 const loadData = async () => {
