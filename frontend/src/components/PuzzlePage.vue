@@ -291,6 +291,10 @@ const goBack = () => {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .puzzle-header {
@@ -313,6 +317,10 @@ const goBack = () => {
 .puzzle-content {
   max-width: 600px;
   margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .stats-bar {
@@ -392,6 +400,10 @@ const goBack = () => {
   padding: 12px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .original-preview {
@@ -468,6 +480,10 @@ const goBack = () => {
   font-size: 24px;
   font-weight: bold;
   transition: all 0.3s;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .tile-hidden {
