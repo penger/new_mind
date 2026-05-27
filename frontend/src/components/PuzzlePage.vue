@@ -101,7 +101,7 @@
           :key="originalVal"
           class="tile-wrapper"
           :style="getTileWrapperStyle(originalVal)"
-          @click="handleTileClick(originalVal)"
+          @mouseenter="handleTileHover(originalVal)"
         >
           <div 
             :class="getTileClasses(originalVal)"
@@ -181,6 +181,46 @@ watch(size, () => {
 onMounted(() => {
   resetGame();
 });
+
+// 用于鼠标悬停移动的定时器
+let hoverTimer = null;
+
+const handleTileHover = (originalVal) => {
+  // 如果游戏已结束或点击的是空方块，不处理
+  if (isSolved.value || originalVal === size.value * size.value - 1) return;
+  
+  // 清除之前的定时器
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+  }
+  
+  // 添加延迟，避免鼠标快速移动时重复触发
+  hoverTimer = setTimeout(() => {
+    const emptyOriginalVal = size.value * size.value - 1;
+    const currentIndex = tiles.value.indexOf(originalVal);
+    const emptyIndex = tiles.value.indexOf(emptyOriginalVal);
+
+    const curRow = Math.floor(currentIndex / size.value);
+    const curCol = currentIndex % size.value;
+    const emptyRow = Math.floor(emptyIndex / size.value);
+    const emptyCol = emptyIndex % size.value;
+
+    // 检查是否与空方块相邻（曼哈顿距离为1）
+    const isAdjacent = Math.abs(curRow - emptyRow) + Math.abs(curCol - emptyCol) === 1;
+
+    if (isAdjacent) {
+      const newTiles = [...tiles.value];
+      [newTiles[currentIndex], newTiles[emptyIndex]] = [newTiles[emptyIndex], newTiles[currentIndex]];
+      tiles.value = newTiles;
+      moves.value++;
+
+      // 判断胜利
+      if (isSolvedState(newTiles)) {
+        isSolved.value = true;
+      }
+    }
+  }, 50); // 50ms 延迟
+};
 
 const handleTileClick = (originalVal) => {
   if (isSolved.value || originalVal === size.value * size.value - 1) return;
