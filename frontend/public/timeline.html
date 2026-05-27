@@ -264,6 +264,11 @@
                     return filtered.sort((a, b) => {
                         const ageA = getAge(a);
                         const ageB = getAge(b);
+                        
+                        if (typeof ageA !== 'number' || typeof ageB !== 'number') {
+                            return 0;
+                        }
+                        
                         return ageB - ageA;
                     });
                 });
