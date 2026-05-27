@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
-from app.routers import graphs, auth
+from app.routers import graphs, auth, timeline
 import logging
 
 logging.basicConfig(level=logging.INFO)
