@@ -247,7 +247,7 @@
                 });
 
                 const alivePersons = computed(() => {
-                    return allPersons.value.filter(person => {
+                    const filtered = allPersons.value.filter(person => {
                         if (!person.birth_date) return false;
                         const birthYear = parseInt(person.birth_date.split('-')[0]);
                         if (currentYear.value < birthYear) return false;
@@ -256,6 +256,12 @@
                             return currentYear.value <= deathYear;
                         }
                         return true;
+                    });
+                    
+                    return filtered.sort((a, b) => {
+                        const ageA = getAge(a);
+                        const ageB = getAge(b);
+                        return ageB - ageA;
                     });
                 });
 
