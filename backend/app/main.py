@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(graphs.router)
 app.include_router(auth.router)
+app.include_router(timeline.router)
 
 
 @app.get("/")

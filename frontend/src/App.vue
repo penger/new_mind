@@ -41,7 +41,9 @@
         <el-radio-group v-model="viewType" size="default">
           <el-radio-button value="2d">平面图</el-radio-button>
           <el-radio-button value="3d">星云图</el-radio-button>
+          <el-radio-button value="timeline">📅 历史时间轴</el-radio-button>
         </el-radio-group>
+        <el-button @click="openHistoricalTimeline">📅</el-button>
         <el-divider direction="vertical" v-if="isAdmin" />
         <el-button v-if="isAdmin" @click="handleBackup" :loading="isBackingUp">💾 备份数据</el-button>
         <el-button v-if="isAdmin" @click="openResourceManager">⚙️ 资源管理</el-button>
@@ -259,6 +261,16 @@
         @refresh="handleUserManagerRefresh"
       />
 
+      <el-drawer
+        v-model="isHistoricalTimelineOpen"
+        title="📅 历史时间轴"
+        direction="rtl"
+        size="90%"
+        :before-close="handleTimelineClose"
+      >
+        <HistoricalTimeline v-if="isHistoricalTimelineOpen" />
+      </el-drawer>
+
       <!-- 内容查看模态框 -->
       <el-dialog
         v-model="isContentModalOpen"
@@ -290,6 +302,7 @@ import Graph3DView from './components/Graph3DView.vue'
 import ResourceManager from './components/ResourceManager.vue'
 import LoginPage from './components/LoginPage.vue'
 import UserManager from './components/UserManager.vue'
+import HistoricalTimeline from './components/HistoricalTimeline.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
@@ -772,6 +785,14 @@ const openResourceManager = () => { isResourceManagerOpen.value = true }
 const handleResourceRefresh = async () => { 
   themes.value = [] 
   await fetchDataFromServer() 
+}
+
+const openHistoricalTimeline = () => { 
+  isHistoricalTimelineOpen.value = true 
+}
+
+const handleTimelineClose = (done) => {
+  done()
 }
 
 const handleBackup = async () => {
