@@ -3,7 +3,7 @@
     <el-tabs v-model="activeTab" type="border-card">
       <el-tab-pane name="browse">
         <template #label>
-          <span><el-icon><DataAnalysis /></el-icon> 浏览时间轴</span>
+          <span>📊 浏览时间轴</span>
         </template>
         
         <el-card class="chart-card">
@@ -34,11 +34,10 @@
               <el-button 
                 :type="isAutoPlaying ? 'danger' : 'primary'" 
                 @click="toggleAutoPlay"
-                :icon="isAutoPlaying ? 'VideoPause' : 'VideoPlay'"
               >
-                {{ isAutoPlaying ? '暂停' : '播放' }}
+                {{ isAutoPlaying ? '⏸️ 暂停' : '▶️ 播放' }}
               </el-button>
-              <el-button @click="resetYear" icon="Refresh">重置</el-button>
+              <el-button @click="resetYear">🔄 重置</el-button>
             </div>
           </div>
         </el-card>
@@ -63,15 +62,15 @@
                   <div class="person-content">
                     <div class="person-dates">
                       <div v-if="person.birth_date">
-                        <el-icon><Calendar /></el-icon> 
+                        <span>📆</span> 
                         出生: {{ person.birth_date }}
                       </div>
                       <div v-if="person.death_date">
-                        <el-icon><Coin /></el-icon> 
+                        <span>⚰️</span> 
                         逝世: {{ person.death_date }}
                       </div>
                       <div v-else class="alive-status">
-                        <el-icon><User /></el-icon> 
+                        <span>👤</span> 
                         在世
                       </div>
                     </div>
@@ -134,14 +133,14 @@
             <el-col :span="8">
               <el-statistic title="历史人物总数" :value="historicalPersons.length">
                 <template #prefix>
-                  <el-icon><User /></el-icon>
+                  <span>👤</span>
                 </template>
               </el-statistic>
             </el-col>
             <el-col :span="8">
               <el-statistic title="历史事件总数" :value="allHistoricalEvents.length">
                 <template #prefix>
-                  <el-icon><Calendar /></el-icon>
+                  <span>📅</span>
                 </template>
               </el-statistic>
             </el-col>
