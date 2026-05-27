@@ -443,6 +443,7 @@ const checkAuthStatus = () => {
 const viewType = ref('2d'), isEditing = ref(false), isPanelOpen = ref(false), isInfoCardOpen = ref(false)
 const isResourceManagerOpen = ref(false)
 const isUserManagerOpen = ref(false)
+const isHistoricalTimelineOpen = ref(false)
 const isContentModalOpen = ref(false)
 const modalContent = ref('')
 const searchQuery = ref('')
