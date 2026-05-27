@@ -42,6 +42,13 @@
         <div class="error-message" v-if="errorMessage">
           {{ errorMessage }}
         </div>
+
+        <button 
+          class="nav-btn"
+          @click="goToNavigation"
+        >
+          📚 应用导航
+        </button>
       </div>
     </div>
   </div>
@@ -51,7 +58,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
-const emit = defineEmits(['login'])
+const emit = defineEmits(['login', 'navigate'])
 
 const username = ref('')
 const password = ref('')
@@ -222,6 +229,10 @@ const handleLogin = async () => {
   }
 }
 
+const goToNavigation = () => {
+  emit('navigate', 'navigation');
+};
+
 onMounted(() => {
   initParticles()
   animate()
@@ -345,6 +356,26 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.nav-btn {
+  width: 100%;
+  padding: 12px 24px;
+  background: rgba(51, 65, 85, 0.6);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  border-radius: 12px;
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 12px;
+}
+
+.nav-btn:hover {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(129, 140, 248, 0.5);
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
 }
 
 .login-btn:hover:not(:disabled) {

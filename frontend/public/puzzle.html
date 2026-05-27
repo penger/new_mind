@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>滑块拼图</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            color: #303133;
+            font-size: 24px;
+        }
+        .header a {
+            color: #409EFF;
+            text-decoration: none;
+        }
+        .stats {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #409EFF;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #909399;
+        }
+        .controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .control-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #409EFF;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #66b1ff;
+        }
+        .btn-secondary {
+            background: #E8E8E8;
+            color: #606266;
+        }
+        .btn-secondary:hover {
+            background: #D0D0D0;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-group .btn {
+            flex: 1;
+        }
+        .btn-group .btn.active {
+            background: #409EFF;
+            color: white;
+        }
+        .game-board {
+            background: #E8E8E8;
+            border-radius: 12px;
+            padding: 12px;
+            aspect-ratio: 1;
+            display: grid;
+            gap: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .tile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border-radius: 8px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #303133;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .tile:hover {
+            background: #F0F0F0;
+        }
+        .tile.empty {
+            background: transparent;
+            cursor: default;
+        }
+        .tile.empty:hover {
+            background: transparent;
+        }
+        .victory-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .victory-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        .victory-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: #303133;
+            margin-bottom: 10px;
+        }
+        .victory-text {
+            font-size: 18px;
+            color: #606266;
+            margin-bottom: 30px;
+        }
+        .victory-text span {
+            color: #409EFF;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [size, setSize] = useState(3);
+            const [tiles, setTiles] = useState([]);
+            const [moves, setMoves] = useState(0);
+            const [isSolved, setIsSolved] = useState(false);
+
+            const isSolvedState = (tilesArray) => {
+                return tilesArray.every((val, index) => val === index);
+            };
+
+            const shuffleTiles = (currentSize) => {
+                let newTiles = Array.from({ length: currentSize * currentSize }, (_, i) => i);
+                let emptyIdx = currentSize * currentSize - 1;
+                let lastEmptyIdx = -1;
+                const shuffleMoves = currentSize * currentSize * 50;
+
+                for (let i = 0; i < shuffleMoves; i++) {
+                    const neighbors = [];
+                    const row = Math.floor(emptyIdx / currentSize);
+                    const col = emptyIdx % currentSize;
+
+                    if (row > 0) neighbors.push(emptyIdx - currentSize);
+                    if (row < currentSize - 1) neighbors.push(emptyIdx + currentSize);
+                    if (col > 0) neighbors.push(emptyIdx - 1);
+                    if (col < currentSize - 1) neighbors.push(emptyIdx + 1);
+
+                    const validNeighbors = neighbors.filter(n => n !== lastEmptyIdx);
+                    const candidates = validNeighbors.length > 0 ? validNeighbors : neighbors;
+                    const randomNeighbor = candidates[Math.floor(Math.random() * candidates.length)];
+
+                    [newTiles[emptyIdx], newTiles[randomNeighbor]] = [newTiles[randomNeighbor], newTiles[emptyIdx]];
+                    lastEmptyIdx = emptyIdx;
+                    emptyIdx = randomNeighbor;
+                }
+
+                if (isSolvedState(newTiles)) {
+                    return shuffleTiles(currentSize);
+                }
+                return newTiles;
+            };
+
+            const resetGame = () => {
+                setTiles(shuffleTiles(size));
+                setMoves(0);
+                setIsSolved(false);
+            };
+
+            useEffect(() => {
+                resetGame();
+            }, [size]);
+
+            const handleTileClick = (originalVal) => {
+                if (isSolved || originalVal === size * size - 1) return;
+
+                const emptyOriginalVal = size * size - 1;
+                const currentIndex = tiles.indexOf(originalVal);
+                const emptyIndex = tiles.indexOf(emptyOriginalVal);
+
+                const curRow = Math.floor(currentIndex / size);
+                const curCol = currentIndex % size;
+                const emptyRow = Math.floor(emptyIndex / size);
+                const emptyCol = emptyIndex % size;
+
+                const isAdjacent = Math.abs(curRow - emptyRow) + Math.abs(curCol - emptyCol) === 1;
+
+                if (isAdjacent) {
+                    const newTiles = [...tiles];
+                    [newTiles[currentIndex], newTiles[emptyIndex]] = [newTiles[emptyIndex], newTiles[currentIndex]];
+                    setTiles(newTiles);
+                    setMoves(m => m + 1);
+
+                    if (isSolvedState(newTiles)) {
+                        setIsSolved(true);
+                    }
+                }
+            };
+
+            if (tiles.length === 0) return null;
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <h1>🧩 滑块拼图</h1>
+                        <a href="/navigation">← 返回导航</a>
+                    </div>
+
+                    <div className="stats">
+                        <div className="stat">
+                            <div className="stat-value">{moves}</div>
+                            <div className="stat-label">移动步数</div>
+                        </div>
+                        <div className="stat">
+                            <div className="stat-value">{size}×{size}</div>
+                            <div className="stat-label">难度</div>
+                        </div>
+                    </div>
+
+                    <div className="controls">
+                        <div className="control-row">
+                            <div className="btn-group">
+                                {[3, 4, 5].map(s => (
+                                    <button
+                                        key={s}
+                                        className={`btn btn-secondary ${size === s ? 'active' : ''}`}
+                                        onClick={() => setSize(s)}
+                                    >
+                                        {s}×{s}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="control-row">
+                            <button className="btn btn-primary" onClick={resetGame} style={{flex: 1}}>
+                                🔄 重新开始
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="game-board" style={{gridTemplateColumns: `repeat(${size}, 1fr)`}}>
+                        {Array.from({ length: size * size }).map((_, originalVal) => {
+                            const currentIndex = tiles.indexOf(originalVal);
+                            if (currentIndex === -1) return null;
+
+                            const isEmpty = originalVal === size * size - 1;
+
+                            return (
+                                <div 
+                                    key={originalVal}
+                                    className={`tile ${isEmpty ? 'empty' : ''}`}
+                                    onClick={() => handleTileClick(originalVal)}
+                                >
+                                    {!isEmpty && (originalVal + 1)}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {isSolved && moves > 0 && (
+                        <div className="victory-overlay">
+                            <div className="victory-icon">🏆</div>
+                            <div className="victory-title">拼图完成！</div>
+                            <div className="victory-text">
+                                共移动了 <span>{moves}</span> 步
+                            </div>
+                            <button className="btn btn-primary" onClick={resetGame}>
+                                再来一局
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

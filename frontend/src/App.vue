@@ -1,10 +1,13 @@
 <template>
   <div class="app-container">
     <!-- 登录页面 -->
-    <LoginPage v-if="!isLoggedIn" @login="handleLogin" />
+    <LoginPage v-if="!isLoggedIn && currentView === 'login'" @login="handleLogin" @navigate="handleNavigate" />
+    
+    <!-- 导航页面（未登录用户） -->
+    <NavigationPage v-if="currentView === 'navigation' && !isLoggedIn" @navigate="handleNavigate" @back="goBackToLogin" />
     
     <!-- 主应用 -->
-    <template v-else>
+    <template v-else-if="currentView === 'app' && isLoggedIn">
     <el-header>
       <div class="header-left">
         <h1>关系图谱专业版</h1>
@@ -292,6 +295,7 @@ import ResourceManager from './components/ResourceManager.vue'
 import LoginPage from './components/LoginPage.vue'
 import UserManager from './components/UserManager.vue'
 import HistoricalTimeline from './components/HistoricalTimeline.vue'
+import NavigationPage from './components/NavigationPage.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
@@ -302,7 +306,22 @@ const {
 // 用户认证状态
 const isLoggedIn = ref(false)
 const currentUser = ref(null)
+const currentView = ref('login') // 页面视图状态：login, navigation, app
 const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+// 处理导航事件
+const handleNavigate = (target) => {
+  if (target === 'navigation') {
+    currentView.value = 'navigation'
+  } else if (target === 'app') {
+    currentView.value = 'app'
+  }
+}
+
+// 返回登录页
+const goBackToLogin = () => {
+  currentView.value = 'login'
+}
 
 // 根据用户权限过滤可访问的主题
 const accessibleThemes = computed(() => {
@@ -351,6 +370,7 @@ const canEditCurrentTheme = computed(() => {
 const handleLogin = async (user) => {
   currentUser.value = user
   isLoggedIn.value = true
+  currentView.value = 'app' // 登录后进入主应用
   isEditing.value = false // 登录后默认浏览模式
   await fetchDataFromServer(undefined, true)
 }
