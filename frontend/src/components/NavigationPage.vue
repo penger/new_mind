@@ -18,7 +18,7 @@
           :key="app.id" 
           class="app-card"
           shadow="hover"
-          @click="navigateTo(app.path)"
+          @click="navigateTo(app)"
         >
           <div class="app-icon">{{ app.icon }}</div>
           <div class="app-name">{{ app.name }}</div>
@@ -30,36 +30,43 @@
 </template>
 
 <script setup>
-import { emit } from 'vue';
-
 const emit = defineEmits(['navigate', 'back']);
 
 const apps = [
   {
-    id: 1,
+    id: 'graph',
     name: '关系图谱编辑器',
     icon: '🕸️',
     description: '创建和管理知识关系图谱',
-    path: '/'
+    path: '/',
+    type: 'component'
   },
   {
-    id: 2,
+    id: 'timeline',
     name: '历史时间轴',
     icon: '📅',
     description: '探索历史人物和事件',
-    path: '/timeline'
+    path: '/timeline.html',
+    type: 'external'
   },
   {
-    id: 3,
+    id: 'puzzle',
     name: '滑块拼图',
     icon: '🧩',
     description: '益智滑块拼图游戏',
-    path: '/puzzle'
+    path: '/puzzle.html',
+    type: 'component'
   }
 ];
 
-const navigateTo = (path) => {
-  emit('navigate', path);
+const navigateTo = (app) => {
+  if (app.type === 'external') {
+    // 外部页面，直接跳转
+    window.location.href = app.path;
+  } else {
+    // 内部应用
+    emit('navigate', app.id);
+  }
 };
 
 const goBack = () => {

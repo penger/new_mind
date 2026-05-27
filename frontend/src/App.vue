@@ -1,13 +1,16 @@
 <template>
   <div class="app-container">
     <!-- 登录页面 -->
-    <LoginPage v-if="!isLoggedIn && currentView === 'login'" @login="handleLogin" @navigate="handleNavigate" />
+    <LoginPage v-if="currentView === 'login'" @login="handleLogin" @navigate="handleNavigate" />
     
     <!-- 导航页面（未登录用户） -->
-    <NavigationPage v-if="currentView === 'navigation' && !isLoggedIn" @navigate="handleNavigate" @back="goBackToLogin" />
+    <NavigationPage v-else-if="currentView === 'navigation'" @navigate="handleNavigate" @back="goBackToLogin" />
+    
+    <!-- 拼图页面 -->
+    <PuzzlePage v-else-if="currentView === 'puzzle'" @back="goBackToApp" />
     
     <!-- 主应用 -->
-    <template v-else-if="currentView === 'app' && isLoggedIn">
+    <template v-else>
     <el-header>
       <div class="header-left">
         <h1>关系图谱专业版</h1>
@@ -296,6 +299,7 @@ import LoginPage from './components/LoginPage.vue'
 import UserManager from './components/UserManager.vue'
 import HistoricalTimeline from './components/HistoricalTimeline.vue'
 import NavigationPage from './components/NavigationPage.vue'
+import PuzzlePage from './components/PuzzlePage.vue'
 
 const {
   nodes, links, nodeStyles, edgeStyles, themes, activeThemeFilter, visibleThemes,
@@ -315,7 +319,14 @@ const handleNavigate = (target) => {
     currentView.value = 'navigation'
   } else if (target === 'app') {
     currentView.value = 'app'
+  } else if (target === 'puzzle') {
+    currentView.value = 'puzzle'
   }
+}
+
+// 返回主应用
+const goBackToApp = () => {
+  currentView.value = 'app'
 }
 
 // 返回登录页
