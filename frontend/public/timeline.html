@@ -145,49 +145,44 @@
             </div>
         </div>
 
-        <el-row :gutter="20">
-            <el-col :span="12">
-                <el-card>
+        <el-card style="margin-bottom: 20px;">
+            <template #header>
+                <span>📊 {{ currentYear }}年年龄分布</span>
+            </template>
+            <div id="age-chart" class="chart-container"></div>
+        </el-card>
+
+        <el-card style="margin-bottom: 20px;">
+            <template #header>
+                <span>👥 {{ currentYear }}年在世人物 ({{ alivePersons.length }}人)</span>
+            </template>
+            <div class="person-grid">
+                <el-card 
+                    v-for="person in alivePersons" 
+                    :key="person.id" 
+                    class="person-card"
+                >
                     <template #header>
-                        <span>📊 {{ currentYear }}年年龄分布</span>
-                    </template>
-                    <div id="age-chart" class="chart-container"></div>
-                </el-card>
-            </el-col>
-            <el-col :span="12">
-                <el-card>
-                    <template #header>
-                        <span>👥 {{ currentYear }}年在世人物 ({{ alivePersons.length }}人)</span>
-                    </template>
-                    <div class="person-grid">
-                        <el-card 
-                            v-for="person in alivePersons" 
-                            :key="person.id" 
-                            class="person-card"
-                        >
-                            <template #header>
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <strong>{{ person.name }}</strong>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <el-tag size="small" type="success">{{ getAge(person) }}岁</el-tag>
-                                        <el-tag v-if="getFinalLifespan(person)" size="small" type="info" effect="plain">寿 {{ getFinalLifespan(person) }}岁</el-tag>
-                                        <el-tag v-else size="small" type="success" effect="plain">在世</el-tag>
-                                    </div>
-                                </div>
-                            </template>
-                            <div style="font-size: 13px; color: #606266;">
-                                <p v-if="person.birth_date">📆 出生: {{ person.birth_date }}</p>
-                                <p v-if="person.death_date">⚰️ 逝世: {{ person.death_date }}</p>
-                                <p v-if="person.bio" style="margin-top: 8px;">{{ person.bio.substring(0, 100) }}...</p>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>{{ person.name }}</strong>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <el-tag size="small" type="success">{{ getAge(person) }}岁</el-tag>
+                                <el-tag v-if="getFinalLifespan(person)" size="small" type="info" effect="plain">寿 {{ getFinalLifespan(person) }}岁</el-tag>
+                                <el-tag v-else size="small" type="success" effect="plain">在世</el-tag>
                             </div>
-                        </el-card>
-                        <div v-if="alivePersons.length === 0" style="text-align: center; padding: 40px; color: #909399; grid-column: 1 / -1;">
-                            暂无在世人物
                         </div>
+                    </template>
+                    <div style="font-size: 13px; color: #606266;">
+                        <p v-if="person.birth_date">📆 出生: {{ person.birth_date }}</p>
+                        <p v-if="person.death_date">⚰️ 逝世: {{ person.death_date }}</p>
+                        <p v-if="person.bio" style="margin-top: 8px;">{{ person.bio.substring(0, 100) }}...</p>
                     </div>
                 </el-card>
-            </el-col>
-        </el-row>
+                <div v-if="alivePersons.length === 0" style="text-align: center; padding: 40px; color: #909399; grid-column: 1 / -1;">
+                    暂无在世人物
+                </div>
+            </div>
+        </el-card>
 
         <el-card style="margin-top: 20px;">
             <template #header>
